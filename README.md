@@ -1,167 +1,283 @@
-# infra-home — Libération TV Philips 55OLED708 + Firesticks + Hue
+# infra-home
 
-Stack Docker (HA + Pi-hole + Mosquitto + Ambisync) pour piloter ma chambre, bypasser la suppression Ambilight+hue TP Vision, et virer pubs/télémétrie Amazon/Philips/Google.
+**Bypass the removed Ambilight+Hue feature, sync your PC LEDs to your TV, debloat Fire TV Sticks, and block ads network-wide — all orchestrated from a single Home Assistant dashboard.**
 
-## Runbook par phase
+> TP Vision removed Ambilight+Hue from 2023 Philips TVs, pushing a ~250 EUR Hue Sync Box.
+> This project brings it back for free, and goes much further.
 
-### Phase 0 — Prérequis tour GPU
+<!-- TODO: Replace with actual demo video -->
+<!-- https://github.com/user-attachments/assets/your-video-id -->
 
-```bash
-# Docker déjà installé normalement. Sinon:
-sudo apt install docker.io docker-compose-plugin -y
-sudo usermod -aG docker $USER
-# reconnecter shell
-
-# Libérer port 53 pour Pi-hole (désactive stub resolver systemd):
-sudo sed -i 's/#DNSStubListener=yes/DNSStubListener=no/' /etc/systemd/resolved.conf
-sudo systemctl restart systemd-resolved
-# DNS système: pointer /etc/resolv.conf vers 127.0.0.1 après Pi-hole up
-```
+https://github.com/user-attachments/assets/PLACEHOLDER_DEMO_VIDEO
 
 ---
 
-### Phase 1 — TV + Hue + Bypass (actions manuelles + scripts)
+## What it does
 
-**Actions manuelles TV** :
-1. TV allumée → Settings → À propos → 7 clics sur Build → Developer Options activé
-2. Activer ADB debugging + noter IP TV
-3. HDMI Ultra HD → Optimal (Game) sur ports utilisés
-4. Activer JointSPACE si besoin : télécommande `5646877223` en regardant TV
-5. Menu service panel OLED (bonus) : `1 2 3 6 5 4` rapide ou `062596`
+| Feature | Description | Savings |
+|---------|-------------|---------|
+| **Ambilight &rarr; Hue sync** | TV colors push to Hue lamps in real-time via JointSPACE API | ~250 EUR (no Sync Box) |
+| **Ambilight &rarr; PC LEDs** | Same TV colors sync to motherboard/RAM RGB via OpenRGB | Free immersion |
+| **Fire TV debloat** | Remove Amazon ads, telemetry, replace launcher | No more ads |
+| **Pi-hole DNS** | Network-wide ad/tracking blocker (38+ custom domains) | All devices protected |
+| **Home Assistant** | Central dashboard, automations, scenes, remote control | One app rules all |
 
-**Pairing Hue** :
-1. Brancher bridge Hue Ethernet sur box
-2. App Hue mobile → pairer 2× E27 + prise + switch
-3. Créer token API local :
-   ```bash
-   # Récupère IP bridge:
-   curl https://discovery.meethue.com/
-   # Appuyer bouton physique bridge puis dans 30s:
-   curl -X POST http://<IP_BRIDGE>/api -H 'Content-Type: application/json' \
-     -d '{"devicetype":"ambisync#yaniss"}'
-   # → retourne {"success":{"username":"TOKEN"}}, garde TOKEN
-   ```
-4. Lister lampes pour récupérer IDs :
-   ```bash
-   curl http://<IP_BRIDGE>/api/<TOKEN>/lights | jq
-   ```
+---
 
-**Pairing JointSPACE TV** :
+## Demo
+
+### Dashboard
+
+<!-- TODO: Screenshot of the main dashboard -->
+![Dashboard - Chambre](docs/screenshots/dashboard_chambre.png)
+
+<!-- TODO: Screenshot of the services view -->
+![Dashboard - Services](docs/screenshots/dashboard_services.png)
+
+<!-- TODO: Screenshot of the network view -->
+![Dashboard - Reseau](docs/screenshots/dashboard_reseau.png)
+
+### Ambilight Sync in action
+
+<!-- TODO: Photo/video of TV + Hue lamps + PC LEDs all synced -->
+![Ambilight Sync](docs/screenshots/ambilight_sync_demo.gif)
+
+### Before / After Fire TV
+
+<!-- TODO: Side by side screenshots -->
+| Before (stock) | After (debloated) |
+|:-:|:-:|
+| ![Before](docs/screenshots/firetv_before.png) | ![After](docs/screenshots/firetv_after.png) |
+
+---
+
+## Architecture
+
+```
+                    Internet
+                       |
+                   Livebox W7
+                    /     \
+              Pi-hole      Mesh WiFi (Deco)
+             (DNS block)      |
+                |         --------------------
+             GPU Tower    |    |    |    |
+           (RTX 3090)    TV  Stick Stick Phones
+              |          OLED  HD   4K
+         -----------
+         |    |    |
+         HA  MQTT  OpenRGB
+         |
+    ---------------------
+    |         |         |
+  Hue API  JointSPACE  ADB
+    |         |         |
+  Lamps    Ambilight  Firesticks
+```
+
+### How the sync works
+
+```
+TV Ambilight (JointSPACE /6/ambilight/measured)
+       |
+       v
+  [Dominant color extraction + boost]
+       |
+       +----> Hue Bridge REST API -----> Hue Lamps (color sync)
+       |
+       +----> OpenRGB SDK (port 6742) -> Motherboard + RAM LEDs
+```
+
+The sync script polls the TV's Ambilight API, picks the most saturated zone, boosts the color (API returns 0~120, we normalize to 0~255 with 1.5x saturation), and pushes the same unified color to both Hue and OpenRGB simultaneously.
+
+---
+
+## Hardware
+
+| Device | Role |
+|--------|------|
+| Philips 55OLED708 | Ambilight source (JointSPACE API) |
+| Hue Bridge + 2x E27 Color + Smart Plug + Dimmer Switch | Ambient lighting |
+| Fire TV Stick HD | Streaming (debloated) |
+| Fire TV Stick 4K | Streaming (debloated) |
+| GPU Tower (RTX 3090) | Runs HA, Pi-hole, OpenRGB, sync scripts |
+| TP-Link Deco (mesh) | Stable WiFi coverage |
+
+---
+
+## Quick start
+
+### 1. Clone & configure
+
 ```bash
-cd /home/yaniss/infra-home
+git clone https://github.com/YanissAmz/infra-home.git
+cd infra-home
+
+# Secrets
+cp .env.example .env                              # Pi-hole password
+cp ambisync_config/config.example.yml ambisync_config/config.yml  # TV + Hue credentials
+# Edit both files with your values
+```
+
+### 2. Pair your TV (JointSPACE)
+
+```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install requests pyyaml urllib3
-python scripts/philips_jointspace.py --pair --host <IP_TV>
-# PIN s'affiche sur TV → l'entrer dans le prompt
-# → credentials sauvegardés dans scripts/.env.jointspace
+
+python scripts/philips_jointspace.py --pair --host <TV_IP>
+# Enter the PIN shown on TV
 ```
 
-**Test API** :
+### 3. Pair Hue Bridge
+
 ```bash
-python scripts/philips_jointspace.py --powerstate
-python scripts/philips_jointspace.py --ambilight-processed | head -50
+# Press the bridge button, then within 30 seconds:
+curl -X POST http://<BRIDGE_IP>/api \
+  -H 'Content-Type: application/json' \
+  -d '{"devicetype":"ambisync#home"}'
+# Save the returned token in ambisync_config/config.yml
 ```
 
-**Configurer bypass Ambilight→Hue** :
-```bash
-# Éditer ambisync_config/config.yml:
-# - tv.host, tv.device_id, tv.auth_key (depuis scripts/.env.jointspace)
-# - hue.bridge_host, hue.token
-# - mapping: adapter light_id aux vraies IDs retournées par /api/<token>/lights
-nano ambisync_config/config.yml
-
-# Test one-shot:
-python scripts/philips_hue_ambisync.py --once
-```
-
----
-
-### Phase 2 — Stack Docker
+### 4. Launch the stack
 
 ```bash
-cd /home/yaniss/infra-home
-
-# Copier .env.example vers .env et remplir le mot de passe Pi-hole
+# Free port 53 for Pi-hole
+sudo sed -i 's/#DNSStubListener=yes/DNSStubListener=no/' /etc/systemd/resolved.conf
+sudo systemctl restart systemd-resolved
 
 docker compose up -d
-docker compose ps
-docker compose logs -f ambisync   # vérifier que sync tourne
 ```
 
-**Accès** :
-- Home Assistant : http://<IP_TOUR>:8123
-- Pi-hole admin : http://<IP_TOUR>:8081/admin
+### 5. Start the sync
 
-**Pi-hole — importer blocklist custom** :
-- Admin → Adlists → Add : colle URL d'un gist si tu veux l'héberger
-- Ou : Group Management → Domains → Import → coller contenu de `pihole/custom-blocklist.txt`
-
-**Box FAI — forcer DNS** :
-- Admin box → DHCP → DNS primaire = IP tour GPU
-- **DNS secondaire = 1.1.1.1** ← CRITIQUE, fallback si container down
-- Reboot box
-
-**Home Assistant — intégrations** :
-1. First setup HA (compte local)
-2. Install HACS : https://hacs.xyz/docs/setup/download
-3. HACS → Integrations → ajouter :
-   - `jomwells/ambilights` (custom repo)
-   - `mrjackyliang/ha-philips-tv` (ou équivalent maintenu)
-4. Settings → Devices → Add : Philips Hue (auto-discovery), Philips TV (JointSPACE)
-
----
-
-### Phase 3 — Firesticks
-
-**Sur chaque Firestick (HD cuisine + 4K chambre sœur)** :
-1. Settings → My Fire TV → About → 7 clics sur Build
-2. Developer Options → ADB Debugging ON + Apps from Unknown Sources ON
-3. Noter IP (Settings → My Fire TV → About → Network)
-
-**Debloat** :
 ```bash
-cd /home/yaniss/infra-home
-./scripts/debloat_firetv.sh <IP_FIRESTICK_4K>
-./scripts/debloat_firetv.sh <IP_FIRESTICK_HD>
-# accepter prompt ADB sur chaque Firestick (écran "Allow USB debugging?")
+# Test manually first
+python scripts/ambilight_unified_sync.py
+
+# Then install as systemd service (see docs)
 ```
 
-**Sideload APKs** :
-1. Éditer `docs/apks/urls.txt` avec les URLs à jour des dernières releases
-2. Lancer :
-   ```bash
-   ./scripts/firetv_sideload.sh <IP_FIRESTICK>
-   ```
-3. Set Projectivy default launcher :
-   ```bash
-   adb -s <IP>:5555 shell cmd package set-home-activity \
-     com.spocky.projengmenu/.ui.launcher.MainActivity
-   ```
+**Access:**
+- Home Assistant: `http://localhost:8123`
+- Pi-hole admin: `http://localhost:8081/admin`
 
-**Rollback Firestick** :
+---
+
+## Fire TV debloat
+
 ```bash
-ACTION=enable ./scripts/debloat_firetv.sh <IP>
-# + reset launcher via Settings → Applications → Manage → Clear defaults
+# Enable Developer Options on Firestick (7 taps on Build Number)
+# Enable ADB debugging, note the IP
+
+./scripts/debloat_firetv.sh <FIRESTICK_IP>
+# Disables 23+ Amazon bloatware packages (ads, telemetry, appstore promos)
+
+# Rollback anytime:
+ACTION=enable ./scripts/debloat_firetv.sh <FIRESTICK_IP>
 ```
 
 ---
 
-## Vérification end-to-end
+## Dashboard
 
-- [ ] `curl http://<IP_TOUR>/admin/api.php` → Pi-hole répond
-- [ ] `nslookup amazon-adsystem.com <IP_TOUR>` → `0.0.0.0`
-- [ ] `python scripts/philips_jointspace.py --ambilight-processed` → JSON couleurs
-- [ ] Container `ambisync` logs : "polling ... at 5 Hz"
-- [ ] Jouer vidéo colorée sur TV → ampoules Hue suivent les couleurs (<500ms lag)
-- [ ] Firestick : Projectivy au boot, zéro carrousel Amazon
-- [ ] Pi-hole query log montre domaines Amazon bloqués depuis IP Firestick
-- [ ] HA détecte Hue bridge + TV Philips automatiquement
+The Lovelace dashboard includes 5 views:
+
+| View | Features |
+|------|----------|
+| **Chambre** | TV media control, Ambilight, Hue lamps, 5 scenes (Cinema/Gaming/Lecture/Nuit/OFF), automations |
+| **Firesticks** | Launch apps (Stremio/YouTube/IPTV) via ADB, online status |
+| **Services** | Ambilight sync status + restart, Pi-hole stats, OpenRGB status |
+| **Reseau** | Device ping status, Zigbee mesh health, weather |
+| **Systeme** | HACS updates |
+
+### Scenes
+
+| Scene | Lamps | Use case |
+|-------|-------|----------|
+| Cinema | Warm white, very dim | Movie night |
+| Gaming | Blue + Pink, vivid | Gaming session |
+| Lecture | Full brightness, neutral | Reading |
+| Nuit | Minimal, warmest | Bedtime |
+
+### Hue Dimmer Switch mapping
+
+| Button | Short press | Long press |
+|--------|------------|------------|
+| 1 (top) | Lights ON | Gaming scene |
+| 2 | Brightness + | Lecture scene |
+| 3 | Brightness - | Cinema scene |
+| 4 (bottom) | Lights OFF | Nuit scene |
 
 ---
 
-## Compromis et notes
+## Pi-hole blocklist
 
-- **Tour PAS H24** → sync Ambilight→Hue actif uniquement quand PC allumé. Fallback futur = RPi Zero 2 W dédié (~20€).
-- **JointSPACE** peut être fermé sur firmware Philips 2024+ → fallback ADB Android TV.
-- **Root Firestick 4K 2023+** : bootloader probablement signé, root pas garanti. Le debloat ADB couvre 95% des besoins.
-- **OLED burn-in** : éviter HDR peak max permanent sur contenu statique.
+Custom blocklist targeting:
+- Amazon Fire TV telemetry & ads (device-metrics-us, mads-eu, unagi-na...)
+- Philips TV analytics (smarttv.philips.com)
+- Google TV ads
+- Samsung & LG bonus domains
+
+See [`pihole/custom-blocklist.txt`](pihole/custom-blocklist.txt) for the full list.
+
+---
+
+## File structure
+
+```
+infra-home/
+|-- docker-compose.yml              # HA + Pi-hole + Mosquitto
+|-- .env.example                    # Secrets template
+|-- ambisync_config/
+|   |-- config.example.yml          # Sync config template
+|-- ha_config/
+|   |-- configuration.yaml          # HA config (sensors, shell commands)
+|   |-- automations.yaml            # 13 automations (TV + remote)
+|   |-- scenes.yaml                 # 5 scenes
+|   |-- ui-lovelace.yaml            # Dashboard (5 views)
+|-- scripts/
+|   |-- ambilight_unified_sync.py   # TV -> Hue + OpenRGB sync
+|   |-- philips_jointspace.py       # JointSPACE API CLI (pair, control)
+|   |-- philips_hue_ambisync.py     # Hue-only sync (legacy)
+|   |-- ambilight_to_openrgb.py     # OpenRGB-only sync (legacy)
+|   |-- debloat_firetv.sh           # Fire TV debloat/restore
+|   |-- ha_command_bridge.sh        # Host systemctl bridge for HA
+|   |-- update_status.sh            # Cron status updater for HA sensors
+|-- pihole/
+|   |-- custom-blocklist.txt        # 38+ blocked domains
+|-- PROGRESS.md                     # Detailed build log
+|-- MESH_SETUP.md                   # Mesh WiFi install guide
+```
+
+---
+
+## Tested on
+
+- Philips 55OLED708/12 (firmware 2023-2024, JointSPACE v6)
+- Fire TV Stick HD & 4K (FireOS 2025-2026)
+- Hue Bridge v2 + E27 Color A60 + Smart Plug LOM008 + Dimmer Switch RWL022
+- Ubuntu 24.04+ with Docker, RTX 3090
+- Home Assistant 2026.4+
+
+---
+
+## Known limitations
+
+- **PC must be on** for sync and Pi-hole to work. Future: dedicated RPi Zero 2 W (~20 EUR).
+- **JointSPACE** may be locked on future Philips firmware. Fallback: ADB screen capture + Hyperion.
+- **Hue lamp latency** ~200-500ms depending on Zigbee mesh quality. Smart plug as mesh relay helps.
+- **`/6/ambilight/processed` returns zeroes** on 55OLED708. Use `/measured` instead.
+
+---
+
+## Contributing
+
+This started as a personal setup but might help others with Philips Ambilight TVs.
+Feel free to open issues or PRs if you adapt it to your own hardware.
+
+---
+
+## License
+
+MIT

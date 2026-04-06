@@ -1,0 +1,17 @@
+tv:
+  host: "192.168.1.XX"
+  device_id: "your_device_id"
+  auth_key: "your_auth_key"
+
+hue:
+  bridge_host: "192.168.1.XX"
+  token: "your_hue_api_token"
+  mapping:
+    - zone: left
+      light_id: 1
+    - zone: right
+      light_id: 2
+  poll_hz: 3
+  transition_ds: 2
+
+openrgb_poll_hz: 0

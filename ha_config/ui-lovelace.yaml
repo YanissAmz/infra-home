@@ -1,0 +1,324 @@
+title: Maison Yaniss
+views:
+
+  # ─── CHAMBRE ───
+  - title: Chambre
+    path: chambre
+    icon: mdi:bed
+    cards:
+
+      # TV Philips
+      - type: vertical-stack
+        title: TV Philips OLED 55
+        cards:
+          - type: media-control
+            entity: media_player.bedroom_tv
+          - type: light
+            entity: light.philips_ambilight_ambilight
+            name: Ambilight
+
+      # Eclairage Hue
+      - type: vertical-stack
+        title: Eclairage Hue
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: light
+                entity: light.hue_color_lamp_1
+                name: Lampe 1
+              - type: light
+                entity: light.hue_color_lamp_2
+                name: Lampe 2
+          - type: entities
+            entities:
+              - entity: light.hue_smart_plug_1
+                name: Prise Zigbee (relay mesh)
+                icon: mdi:power-plug
+
+      # Scenes
+      - type: vertical-stack
+        title: Ambiances
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Cinema
+                icon: mdi:movie-open
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  target:
+                    entity_id: scene.cinema
+              - type: button
+                name: Gaming
+                icon: mdi:gamepad-variant
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  target:
+                    entity_id: scene.gaming
+              - type: button
+                name: Lecture
+                icon: mdi:book-open-variant
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  target:
+                    entity_id: scene.lecture
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Nuit
+                icon: mdi:weather-night
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  target:
+                    entity_id: scene.nuit
+              - type: button
+                name: Tout OFF
+                icon: mdi:power-sleep
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  target:
+                    entity_id: scene.tout_eteindre
+              - type: button
+                name: Brightness +
+                icon: mdi:brightness-7
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: shell_command.tv_brightness_high
+
+      # Telecommande
+      - type: vertical-stack
+        title: Telecommande Hue
+        cards:
+          - type: entities
+            entities:
+              - entity: sensor.hue_dimmer_switch_1_batterie
+                name: Batterie
+                icon: mdi:battery
+              - entity: sensor.hue_dimmer_switch_1_connectivite_zigbee
+                name: Signal Zigbee
+                icon: mdi:zigbee
+          - type: markdown
+            content: |
+              **Mapping boutons :**
+              | Bouton | Appui court | Appui long |
+              |--------|------------|------------|
+              | **1** (haut) | Allumer lampes | Gaming |
+              | **2** | Brightness + | Lecture |
+              | **3** | Brightness - | Cinema |
+              | **4** (bas) | Tout OFF | Nuit |
+
+      # Automations
+      - type: entities
+        title: Automations
+        show_header_toggle: false
+        entities:
+          - entity: automation.tv_on_ambilight_vivid
+            name: TV ON → Vivid (jour)
+            icon: mdi:brightness-7
+          - entity: automation.22h_ambilight_doux
+            name: 22h → Mode nuit
+            icon: mdi:weather-night
+          - entity: automation.tv_on_apres_22h_ambilight_doux
+            name: TV ON → Doux (nuit)
+            icon: mdi:moon-waning-crescent
+          - entity: automation.tv_off_hue_off
+            name: TV OFF → Lumieres OFF
+            icon: mdi:lightbulb-off
+          - entity: automation.tv_on_hue_on
+            name: TV ON → Lumieres ON
+            icon: mdi:lightbulb-on
+
+  # ─── FIRESTICKS ───
+  - title: Firesticks
+    path: firesticks
+    icon: mdi:fire
+    cards:
+
+      # Firestick HD (cuisine/chambre)
+      - type: vertical-stack
+        title: Firestick HD
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Stremio
+                icon: mdi:filmstrip
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: shell_command.firestick_hd_stremio
+              - type: button
+                name: YouTube
+                icon: mdi:youtube
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: shell_command.firestick_hd_youtube
+              - type: button
+                name: IPTV
+                icon: mdi:television-classic
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: shell_command.firestick_hd_iptv
+
+      # Status
+      - type: entities
+        title: Status Firesticks
+        entities:
+          - entity: binary_sensor.firestick_hd_online
+            name: Firestick HD
+            icon: mdi:fire
+
+  # ─── SERVICES ───
+  - title: Services
+    path: services
+    icon: mdi:server
+    cards:
+
+      # Ambilight Sync
+      - type: vertical-stack
+        title: Ambilight Sync
+        cards:
+          - type: entities
+            entities:
+              - entity: sensor.ambilight_sync_status
+                name: Sync TV → Hue + LEDs
+                icon: mdi:sync
+              - entity: sensor.openrgb_server_status
+                name: OpenRGB Server
+                icon: mdi:led-strip-variant
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Restart Sync
+                icon: mdi:restart
+                icon_height: 35px
+                tap_action:
+                  action: call-service
+                  service: shell_command.ambisync_restart
+              - type: button
+                name: Stop Sync
+                icon: mdi:stop
+                icon_height: 35px
+                tap_action:
+                  action: call-service
+                  service: shell_command.ambisync_stop
+              - type: button
+                name: Start Sync
+                icon: mdi:play
+                icon_height: 35px
+                tap_action:
+                  action: call-service
+                  service: shell_command.ambisync_start
+
+      # Pi-hole
+      - type: vertical-stack
+        title: Pi-hole DNS
+        cards:
+          - type: entities
+            entities:
+              - entity: sensor.pi_hole_blocked_today
+                name: Requetes bloquees
+                icon: mdi:shield-check
+          - type: markdown
+            content: |
+              **Admin Pi-hole** : [http://localhost:8081/admin](http://localhost:8081/admin)
+
+      # Docker stack
+      - type: markdown
+        title: Stack (GPU Tower)
+        content: |
+          | Service | Port | Role |
+          |---------|------|------|
+          | **Home Assistant** | 8123 | Orchestrateur |
+          | **Pi-hole** | 8081 | DNS adblock |
+          | **Mosquitto** | 1883 | MQTT broker |
+          | **OpenRGB** | 6742 | LED sync |
+          | **Ambilight Sync** | — | TV→Hue+LEDs |
+
+  # ─── RESEAU ───
+  - title: Reseau
+    path: reseau
+    icon: mdi:lan
+    cards:
+
+      # Ping status
+      - type: vertical-stack
+        title: Appareils
+        cards:
+          - type: entities
+            entities:
+              - entity: binary_sensor.tv_philips_online
+                name: TV Philips (192.168.1.26)
+                icon: mdi:television
+              - entity: binary_sensor.firestick_hd_online
+                name: Firestick HD (192.168.1.13)
+                icon: mdi:fire
+              - entity: binary_sensor.livebox_online
+                name: Livebox (192.168.1.1)
+                icon: mdi:router-wireless
+
+      # Zigbee mesh
+      - type: entities
+        title: Mesh Zigbee
+        entities:
+          - entity: sensor.hue_bridge_connectivite_zigbee
+            name: Bridge Hue
+            icon: mdi:bridge
+          - entity: sensor.hue_color_lamp_1_connectivite_zigbee
+            name: Lampe 1
+            icon: mdi:lamp
+          - entity: sensor.hue_color_lamp_2_connectivite_zigbee
+            name: Lampe 2
+            icon: mdi:lamp
+          - entity: sensor.hue_smart_plug_1_connectivite_zigbee
+            name: Prise relay
+            icon: mdi:power-plug
+          - entity: sensor.hue_dimmer_switch_1_connectivite_zigbee
+            name: Telecommande
+            icon: mdi:remote
+
+      # Infos
+      - type: markdown
+        title: Tableau appareils
+        content: |
+          | Appareil | IP | Acces |
+          |----------|----|-------|
+          | TV Philips 55OLED708 | 192.168.1.26 | JointSPACE + ADB |
+          | Bridge Hue | DHCP | REST API |
+          | Firestick HD | 192.168.1.13 | ADB |
+          | Firestick 4K (soeur) | — | ADB |
+          | Livebox W7 | 192.168.1.1 | Sysbus API |
+          | GPU Tower | localhost | Docker + systemd |
+
+      # Meteo
+      - type: weather-forecast
+        entity: weather.forecast_maison
+        show_forecast: true
+
+  # ─── SYSTEME ───
+  - title: Systeme
+    path: systeme
+    icon: mdi:cog
+    cards:
+
+      # Updates
+      - type: entities
+        title: Mises a jour
+        entities:
+          - entity: update.hacs_update
+            name: HACS
+          - entity: update.custom_ambilight_update
+            name: Custom Ambilight

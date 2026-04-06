@@ -1,0 +1,19 @@
+# Format: name|url
+# URLs officielles des APKs à sideloader. Vérifier versions à jour avant run.
+# Format nom = celui passé à install (sans .apk).
+#
+# ⚠️ Récupère les URLs exactes des dernières releases avant d'exécuter le script:
+#   - SmartTube Next: https://github.com/yuliskov/SmartTube/releases (chercher smarttube_stable_*.apk)
+#   - Projectivy Launcher: https://projectivy-launcher.com/ (onglet Download)
+#   - Kodi: https://kodi.tv/download (ARM64-v8a stable)
+#   - Jellyfin Android TV: https://github.com/jellyfin/jellyfin-androidtv/releases
+#   - Aurora Store: https://auroraoss.com/download/AuroraStore/
+#   - VLC: https://www.videolan.org/vlc/download-android.html (ARM64)
+#
+# Exemples (REMPLACER par URLs à jour avant exécution):
+# projectivy|https://download.projectivy-launcher.com/releases/latest.apk
+# smarttube|https://github.com/yuliskov/SmartTube/releases/download/XX.XX/smarttube_stable_XX.apk
+# kodi|https://mirrors.kodi.tv/releases/android/arm64-v8a/kodi-XX.X-arm64-v8a.apk
+# jellyfin|https://github.com/jellyfin/jellyfin-androidtv/releases/download/vX.X.X/jellyfin-androidtv-vX.X.X-release.apk
+# aurora|https://auroraoss.com/downloads/AuroraStore/Stable/AuroraStore-X.X.X.apk
+# vlc|https://get.videolan.org/vlc-android/X.X.X/VLC-Android-X.X.X-arm64-v8a.apk

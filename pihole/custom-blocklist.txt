@@ -1,0 +1,49 @@
+# Pi-hole custom blocklist — Amazon FireTV + Philips + Google TV telemetry
+# À importer via Pi-hole admin → Adlists OU coller dans custom-regex/exact lists.
+# Format = host/domain par ligne.
+
+# ==== Amazon Fire TV telemetry & ads ====
+device-metrics-us.amazon.com
+device-metrics-us-2.amazon.com
+mobileanalytics.us-east-1.amazonaws.com
+amazon-adsystem.com
+aax-eu.amazon-adsystem.com
+aax-us-east.amazon-adsystem.com
+c.amazon-adsystem.com
+s.amazon-adsystem.com
+api.amazon-adsystem.com
+fireoscaptiveportal.com
+ftv-ads-eu.amazon.com
+latency.amazon-adsystem.com
+kinesis.us-east-1.amazonaws.com
+firehose.us-east-1.amazonaws.com
+dtjsi1plarrng.cloudfront.net
+d3p8zr0ffa9t17.cloudfront.net
+api-raven.amazon.com
+
+# ==== Philips / TP Vision analytics ====
+cp.philips.com
+analytics.philips.com
+cert-api.philips.com
+pfh-ep.tpv-tech.com
+eu.api.pfh-ep.tpv-tech.com
+connected.mpx.theplatform.eu
+api.iot.philips.com
+
+# ==== Google TV / Android TV ads ====
+doubleclick.net
+googleadservices.com
+googleads.g.doubleclick.net
+pagead2.googlesyndication.com
+ad.doubleclick.net
+stats.g.doubleclick.net
+google-analytics.com
+www.google-analytics.com
+ssl.google-analytics.com
+app-measurement.com
+firebase-settings.crashlytics.com
+crashlyticsreports-pa.googleapis.com
+
+# ==== Samsung / LG ads (bonus si devices futurs) ====
+samsungacr.com
+smartclip.net

@@ -1,0 +1,5 @@
+FROM python:3.12-slim
+WORKDIR /app
+RUN pip install --no-cache-dir requests pyyaml urllib3
+# Script monté en volume read-only au runtime
+CMD ["python", "/app/scripts/philips_hue_ambisync.py"]

@@ -1,0 +1,61 @@
+# Home automation stack — tour GPU
+# Services: Home Assistant + Pi-hole + Mosquitto + Ambisync
+# Lancer: docker compose up -d
+# IMPORTANT: avant de démarrer Pi-hole, libérer port 53 (désactiver systemd-resolved stub)
+
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    restart: unless-stopped
+    network_mode: host         # requis pour mDNS discovery (Hue, Philips TV)
+    volumes:
+      - ./ha_config:/config
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Europe/Paris
+
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8081:80/tcp"          # web admin sur 8081 (80 laissé libre pour HA ou futur reverse proxy)
+    environment:
+      - TZ=Europe/Paris
+      - FTLCONF_webserver_api_password=${PIHOLE_PASSWORD}
+      - FTLCONF_dns_listeningMode=all
+    volumes:
+      - ./pihole/etc-pihole:/etc/pihole
+      - ./pihole/etc-dnsmasq.d:/etc/dnsmasq.d
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto_config:/mosquitto/config
+      - ./mosquitto_data:/mosquitto/data
+      - ./mosquitto_log:/mosquitto/log
+
+  ambisync:
+    container_name: ambisync
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.ambisync
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./ambisync_config:/app/ambisync_config:ro
+    command: ["python", "/app/scripts/philips_hue_ambisync.py"]
+    environment:
+      - PYTHONUNBUFFERED=1

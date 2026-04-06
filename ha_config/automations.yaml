@@ -1,0 +1,220 @@
+- id: tv_on_ambilight_vivid
+  alias: TV ON → Ambilight Vivid
+  trigger:
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: playing
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: idle
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: 'on'
+  condition:
+  - condition: time
+    before: '22:00:00'
+  action:
+  - service: light.turn_on
+    target:
+      entity_id: light.philips_ambilight_ambilight
+    data:
+      effect: Vivid
+      brightness: 255
+- id: night_mode_ambilight
+  alias: 22h → Ambilight doux
+  triggers:
+  - at: '22:00:00'
+    trigger: time
+  conditions:
+  - condition: not
+    conditions:
+    - condition: state
+      entity_id: media_player.bedroom_tv
+      state: 'off'
+  actions:
+  - target:
+      entity_id: light.philips_ambilight_ambilight
+    data:
+      effect: Natural
+      brightness: 100
+    action: light.turn_on
+  - action: shell_command.tv_brightness_low
+- id: tv_on_after_22h
+  alias: TV ON après 22h → Ambilight doux
+  trigger:
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: playing
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: idle
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: 'on'
+  condition:
+  - condition: time
+    after: '22:00:00'
+    before: 06:00:00
+  action:
+  - service: light.turn_on
+    target:
+      entity_id: light.philips_ambilight_ambilight
+    data:
+      effect: Standard
+      brightness: 100
+  - service: shell_command.tv_brightness_low
+- id: tv_off_lights_off
+  alias: TV OFF → Hue OFF
+  trigger:
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: 'off'
+    for: 00:00:30
+  action:
+  - service: light.turn_off
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+- id: tv_on_hue_on
+  alias: TV ON → Hue ON
+  trigger:
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: playing
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: idle
+  - platform: state
+    entity_id: media_player.bedroom_tv
+    to: 'on'
+  action:
+  - service: light.turn_on
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+    data:
+      brightness: 200
+      color_temp_kelvin: 2857
+
+# ─── TELECOMMANDE HUE ───
+
+# Bouton 1 - appui court : tout allumer
+- id: remote_btn1_short
+  alias: "Telecommande: ON"
+  trigger:
+  - platform: state
+    entity_id: event.hue_dimmer_switch_1_bouton_1
+    attribute: event_type
+    to: short_release
+  action:
+  - service: light.turn_on
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+    data:
+      brightness: 200
+      color_temp_kelvin: 2857
+
+# Bouton 1 - appui long : scene gaming
+- id: remote_btn1_long
+  alias: "Telecommande: Gaming"
+  trigger:
+  - platform: state
+    entity_id: event.hue_dimmer_switch_1_bouton_1
+    attribute: event_type
+    to: long_press
+  action:
+  - service: scene.turn_on
+    target:
+      entity_id: scene.gaming
+
+# Bouton 2 - appui court : brightness +
+- id: remote_btn2_short
+  alias: "Telecommande: Brightness +"
+  trigger:
+  - platform: state
+    entity_id: event.hue_dimmer_switch_1_bouton_2
+    attribute: event_type
+    to: short_release
+  action:
+  - service: light.turn_on
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+    data:
+      brightness_step: 50
+
+# Bouton 2 - appui long : scene lecture
+- id: remote_btn2_long
+  alias: "Telecommande: Lecture"
+  trigger:
+  - platform: state
+    entity_id: event.hue_dimmer_switch_1_bouton_2
+    attribute: event_type
+    to: long_press
+  action:
+  - service: scene.turn_on
+    target:
+      entity_id: scene.lecture
+
+# Bouton 3 - appui court : brightness -
+- id: remote_btn3_short
+  alias: "Telecommande: Brightness -"
+  trigger:
+  - platform: state
+    entity_id: event.hue_dimmer_switch_1_bouton_3
+    attribute: event_type
+    to: short_release
+  action:
+  - service: light.turn_on
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+    data:
+      brightness_step: -50
+
+# Bouton 3 - appui long : scene cinema
+- id: remote_btn3_long
+  alias: "Telecommande: Cinema"
+  trigger:
+  - platform: state
+    entity_id: event.hue_dimmer_switch_1_bouton_3
+    attribute: event_type
+    to: long_press
+  action:
+  - service: scene.turn_on
+    target:
+      entity_id: scene.cinema
+
+# Bouton 4 - appui court : tout eteindre
+- id: remote_btn4_short
+  alias: "Telecommande: OFF"
+  trigger:
+  - platform: state
+    entity_id: event.hue_dimmer_switch_1_bouton_4
+    attribute: event_type
+    to: short_release
+  action:
+  - service: light.turn_off
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+
+# Bouton 4 - appui long : scene nuit
+- id: remote_btn4_long
+  alias: "Telecommande: Nuit"
+  trigger:
+  - platform: state
+    entity_id: event.hue_dimmer_switch_1_bouton_4
+    attribute: event_type
+    to: long_press
+  action:
+  - service: scene.turn_on
+    target:
+      entity_id: scene.nuit

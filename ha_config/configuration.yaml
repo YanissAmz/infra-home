@@ -1,0 +1,70 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+shell_command:
+  tv_brightness_low: "adb -s 192.168.1.26:5555 shell settings put system screen_brightness 80"
+  tv_brightness_high: "adb -s 192.168.1.26:5555 shell settings put system screen_brightness 255"
+  # Ambilight sync service (via command bridge on host)
+  ambisync_restart: "echo ambisync_restart > /config/commands/sync_$(date +%s).cmd"
+  ambisync_stop: "echo ambisync_stop > /config/commands/sync_$(date +%s).cmd"
+  ambisync_start: "echo ambisync_start > /config/commands/sync_$(date +%s).cmd"
+  # Firestick apps via ADB
+  firestick_hd_stremio: "adb -s 192.168.1.13:5555 shell am start -n com.stremio.one/.MainActivity"
+  firestick_hd_youtube: "adb -s 192.168.1.13:5555 shell am start -n com.amazon.firetv.youtube/.StartActivity"
+  firestick_hd_iptv: "adb -s 192.168.1.13:5555 shell am start -n com.lizardroid.tivimate/.ui.ActivitySplash"
+
+# Command-line sensors — read status files updated by cron on host
+command_line:
+  - sensor:
+      name: Ambilight Sync Status
+      command: "cat /config/status/ambisync.txt"
+      scan_interval: 30
+  - sensor:
+      name: OpenRGB Server Status
+      command: "cat /config/status/openrgb.txt"
+      scan_interval: 30
+  - sensor:
+      name: Pi-hole Blocked Today
+      command: "cat /config/status/pihole.txt"
+      scan_interval: 60
+  - binary_sensor:
+      name: TV Philips Online
+      command: "cat /config/status/tv.txt"
+      payload_on: "ON"
+      payload_off: "OFF"
+      scan_interval: 30
+      device_class: connectivity
+  - binary_sensor:
+      name: Firestick HD Online
+      command: "cat /config/status/firestick.txt"
+      payload_on: "ON"
+      payload_off: "OFF"
+      scan_interval: 30
+      device_class: connectivity
+  - binary_sensor:
+      name: Livebox Online
+      command: "cat /config/status/livebox.txt"
+      payload_on: "ON"
+      payload_off: "OFF"
+      scan_interval: 30
+      device_class: connectivity
+
+lovelace:
+  mode: yaml
+  resources: []
+  dashboards:
+    lovelace-home:
+      mode: yaml
+      title: Maison
+      filename: ui-lovelace.yaml
+      icon: mdi:home
+      show_in_sidebar: true
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml

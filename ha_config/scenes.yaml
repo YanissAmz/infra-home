@@ -1,0 +1,62 @@
+- id: scene_cinema
+  name: Cinema
+  icon: mdi:movie-open
+  entities:
+    light.hue_color_lamp_1:
+      state: "on"
+      brightness: 30
+      color_temp: 500
+    light.hue_color_lamp_2:
+      state: "on"
+      brightness: 30
+      color_temp: 500
+
+- id: scene_gaming
+  name: Gaming
+  icon: mdi:gamepad-variant
+  entities:
+    light.hue_color_lamp_1:
+      state: "on"
+      brightness: 180
+      rgb_color: [0, 100, 255]
+    light.hue_color_lamp_2:
+      state: "on"
+      brightness: 180
+      rgb_color: [255, 0, 100]
+
+- id: scene_lecture
+  name: Lecture
+  icon: mdi:book-open-variant
+  entities:
+    light.hue_color_lamp_1:
+      state: "on"
+      brightness: 255
+      color_temp: 300
+    light.hue_color_lamp_2:
+      state: "on"
+      brightness: 255
+      color_temp: 300
+
+- id: scene_nuit
+  name: Nuit
+  icon: mdi:weather-night
+  entities:
+    light.hue_color_lamp_1:
+      state: "on"
+      brightness: 15
+      color_temp: 454
+    light.hue_color_lamp_2:
+      state: "on"
+      brightness: 15
+      color_temp: 454
+
+- id: scene_off
+  name: Tout eteindre
+  icon: mdi:power-sleep
+  entities:
+    light.hue_color_lamp_1:
+      state: "off"
+    light.hue_color_lamp_2:
+      state: "off"
+    light.philips_ambilight_ambilight:
+      state: "off"

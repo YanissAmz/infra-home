@@ -1,0 +1,34 @@
+# Secrets
+.env
+scripts/.env.*
+ambisync_config/config.yml
+ha_config/secrets.yaml
+ha_config/.storage/
+ha_config/.cache/
+ha_config/.HA_VERSION
+ha_config/.ha_run.lock
+ha_config/home-assistant.log*
+ha_config/home-assistant_v2.db*
+ha_config/deps/
+ha_config/tts/
+ha_config/blueprints/
+ha_config/custom_components/
+ha_config/status/
+ha_config/commands/
+
+# Docker data
+mosquitto_data/
+mosquitto_log/
+pihole/etc-pihole/
+pihole/etc-dnsmasq.d/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# APKs (too large)
+docs/apks/cache/
+
+# OS
+.DS_Store

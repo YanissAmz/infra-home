@@ -293,28 +293,34 @@ def run():
             continue
 
         layer = data.get("layer1", {})
-        colors = {}
-        for side in ("left", "top", "right"):
-            if layer.get(side):
-                colors[side] = avg_zone(layer[side])
 
-        if not colors:
+        if not layer.get("left") or not layer.get("right"):
             continue
 
-        # Calculer la couleur dominante unique (la plus saturée) pour TOUS les sinks
-        best_sat = 0
-        dominant = (0, 0, 0)
-        for side, (r, g, b) in colors.items():
-            sat = max(r, g, b) - min(r, g, b)
-            if sat > best_sat:
-                best_sat = sat
-                dominant = (r, g, b)
+        # Prolongation mode: prendre le pixel du BAS de chaque côté
+        left_zone = layer["left"]
+        right_zone = layer["right"]
+        bottom_left_key = str(max(int(k) for k in left_zone.keys()))
+        bottom_right_key = str(max(int(k) for k in right_zone.keys()))
 
-        if dominant[0] + dominant[1] + dominant[2] < 15:
+        bl = left_zone[bottom_left_key]
+        br = right_zone[bottom_right_key]
+
+        color_left = boost_color(bl["r"], bl["g"], bl["b"])
+        color_right = boost_color(br["r"], br["g"], br["b"])
+
+        # PC LEDs: moyenne des deux bas
+        pc_r = (color_left[0] + color_right[0]) // 2
+        pc_g = (color_left[1] + color_right[1]) // 2
+        pc_b = (color_left[2] + color_right[2]) // 2
+
+        if color_left[0] + color_left[1] + color_left[2] < 15 and \
+           color_right[0] + color_right[1] + color_right[2] < 15:
             continue
 
-        # Même couleur pour Hue et OpenRGB
-        unified = {"left": dominant, "top": dominant, "right": dominant}
+        # Moyenne des deux pixels bas → même couleur partout
+        bottom_avg = (pc_r, pc_g, pc_b)
+        unified = {"left": bottom_avg, "right": bottom_avg, "top": bottom_avg}
 
         # Push OpenRGB d'abord (local, instantané)
         if orgb_ok:

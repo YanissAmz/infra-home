@@ -89,12 +89,18 @@ views:
                   target:
                     entity_id: scene.tout_eteindre
               - type: button
-                name: Brightness +
-                icon: mdi:brightness-7
+                name: Brightness -
+                icon: mdi:brightness-4
                 icon_height: 40px
                 tap_action:
                   action: call-service
-                  service: shell_command.tv_brightness_high
+                  service: light.turn_on
+                  target:
+                    entity_id:
+                    - light.hue_color_lamp_1
+                    - light.hue_color_lamp_2
+                  data:
+                    brightness_step: -50
 
       # Telecommande
       - type: vertical-stack

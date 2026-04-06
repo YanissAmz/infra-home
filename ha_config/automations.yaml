@@ -38,7 +38,14 @@
       effect: Natural
       brightness: 100
     action: light.turn_on
-  - action: shell_command.tv_brightness_low
+  - action: light.turn_on
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+    data:
+      brightness: 60
+  # TV OLED brightness not controllable via API
 - id: tv_on_after_22h
   alias: TV ON après 22h → Ambilight doux
   trigger:
@@ -62,6 +69,13 @@
     data:
       effect: Standard
       brightness: 100
+  - service: light.turn_on
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+    data:
+      brightness: 60
   - service: shell_command.tv_brightness_low
 - id: tv_off_lights_off
   alias: TV OFF → Hue OFF

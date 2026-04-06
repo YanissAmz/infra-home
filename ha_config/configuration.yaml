@@ -7,16 +7,16 @@ frontend:
   themes: !include_dir_merge_named themes
 
 shell_command:
-  tv_brightness_low: "adb -s 192.168.1.26:5555 shell settings put system screen_brightness 80"
-  tv_brightness_high: "adb -s 192.168.1.26:5555 shell settings put system screen_brightness 255"
+  # TV OLED brightness not controllable via API on 55OLED708
+  # Ambilight brightness is controlled via light.philips_ambilight_ambilight entity instead
   # Ambilight sync service (via command bridge on host)
   ambisync_restart: "echo ambisync_restart > /config/commands/sync_$(date +%s).cmd"
   ambisync_stop: "echo ambisync_stop > /config/commands/sync_$(date +%s).cmd"
   ambisync_start: "echo ambisync_start > /config/commands/sync_$(date +%s).cmd"
   # Firestick apps via ADB
-  firestick_hd_stremio: "adb -s 192.168.1.13:5555 shell am start -n com.stremio.one/.MainActivity"
-  firestick_hd_youtube: "adb -s 192.168.1.13:5555 shell am start -n com.amazon.firetv.youtube/.StartActivity"
-  firestick_hd_iptv: "adb -s 192.168.1.13:5555 shell am start -n com.lizardroid.tivimate/.ui.ActivitySplash"
+  firestick_hd_stremio: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.stremio.one/.MainActivity"
+  firestick_hd_youtube: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.amazon.firetv.youtube/.StartActivity"
+  firestick_hd_iptv: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.lizardroid.tivimate/.ui.ActivitySplash"
 
 # Command-line sensors — read status files updated by cron on host
 command_line:

@@ -3,7 +3,8 @@
 ambilight_unified_sync.py — sync unique : Ambilight → Hue + OpenRGB.
 
 Un seul fetch TV, pousse simultanément vers Hue bridge et OpenRGB LEDs PC.
-Évite que 2 scripts se battent pour la connexion TV.
+Sélection de la couleur la plus saturée de l'écran (pas de moyenne).
+Reconnexion auto TV (backoff exponentiel) et OpenRGB.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import signal
 import sys
 import time
 import threading
+from datetime import datetime
 from pathlib import Path
 
 import requests
@@ -22,6 +24,32 @@ from requests.auth import HTTPDigestAuth
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 CONFIG_PATH = Path(__file__).parent.parent / "ambisync_config" / "config.yml"
+
+# Night mode: 22h-6h → reduced brightness
+NIGHT_START = 22
+NIGHT_END = 6
+NIGHT_HUE_BRI = 20
+NIGHT_LED_SCALE = 0.05  # 5% brightness for OpenRGB LEDs at night
+
+# Couleur par défaut quand TV éteinte (bleu doux)
+IDLE_COLOR = (0, 40, 255)
+
+# Delta filter — seuil pour éviter micro-tremblements
+DELTA_THRESHOLD_ORGB = 25
+DELTA_THRESHOLD_HUE = 25
+
+_night_cache: bool = False
+_night_cache_ts: float = 0.0
+
+
+def is_night() -> bool:
+    global _night_cache, _night_cache_ts
+    now = time.monotonic()
+    if now - _night_cache_ts > 60.0:
+        h = datetime.now().hour
+        _night_cache = h >= NIGHT_START or h < NIGHT_END
+        _night_cache_ts = now
+    return _night_cache
 
 # OpenRGB import (optional)
 try:
@@ -50,37 +78,33 @@ def rgb_to_xy(r: int, g: int, b: int) -> tuple[float, float]:
     return X / s, Y / s
 
 
+API_MAX = 160  # plafond observé de l'API Ambilight (valeurs brutes)
+
+
 def boost_color(r: int, g: int, b: int) -> tuple[int, int, int]:
-    """Amplifie et sature les couleurs faibles de l'API Ambilight.
-    L'API retourne des valeurs 0-~120 au lieu de 0-255.
-    On normalise au max du canal le plus fort puis on boost la saturation."""
+    """Boost fidèle à l'Ambilight : couleurs renforcées + luminosité proportionnelle.
+    Scène sombre → LEDs sombres. Scène lumineuse → LEDs lumineuses."""
     mx = max(r, g, b)
-    if mx < 10:
+    if mx < 5:
         return 0, 0, 0
-    # Normaliser pour que le canal max = 255
+    # Luminosité relative : à quel point la scène est lumineuse (0.0-1.0)
+    brightness = min(1.0, mx / API_MAX)
+    # Normaliser les proportions entre canaux (teinte + saturation relative)
     scale = 255.0 / mx
-    r2 = min(255, int(r * scale))
-    g2 = min(255, int(g * scale))
-    b2 = min(255, int(b * scale))
-    # Boost saturation : éloigner les canaux faibles du max
+    r2 = r * scale
+    g2 = g * scale
+    b2 = b * scale
+    # Boost saturation modéré (×1.4) — garde les blancs blancs
     avg = (r2 + g2 + b2) / 3
-    sat_boost = 1.5
-    r2 = min(255, max(0, int(avg + (r2 - avg) * sat_boost)))
-    g2 = min(255, max(0, int(avg + (g2 - avg) * sat_boost)))
-    b2 = min(255, max(0, int(avg + (b2 - avg) * sat_boost)))
+    sat_boost = 1.4
+    r2 = avg + (r2 - avg) * sat_boost
+    g2 = avg + (g2 - avg) * sat_boost
+    b2 = avg + (b2 - avg) * sat_boost
+    # Appliquer la luminosité de la scène
+    r2 = min(255, max(0, int(r2 * brightness)))
+    g2 = min(255, max(0, int(g2 * brightness)))
+    b2 = min(255, max(0, int(b2 * brightness)))
     return r2, g2, b2
-
-
-def avg_zone(zone_data: dict) -> tuple[int, int, int]:
-    rs, gs, bs, n = 0, 0, 0, 0
-    for _key, rgb in zone_data.items():
-        rs += rgb.get("r", 0)
-        gs += rgb.get("g", 0)
-        bs += rgb.get("b", 0)
-        n += 1
-    if n == 0:
-        return 0, 0, 0
-    return boost_color(rs // n, gs // n, bs // n)
 
 
 class TVConnection:
@@ -90,6 +114,8 @@ class TVConnection:
         self.session = requests.Session()
         self.session.auth = self.auth
         self.session.verify = False
+        self._backoff = 0.3
+        self._max_backoff = 15.0
 
     def fetch_ambilight(self) -> dict | None:
         try:
@@ -97,10 +123,17 @@ class TVConnection:
                 f"https://{self.host}:1926/6/ambilight/measured", timeout=0.8
             )
             r.raise_for_status()
+            self._backoff = 0.3  # reset on success
             return r.json()
         except Exception:
             self._reconnect()
             return None
+
+    def get_backoff(self) -> float:
+        """Retourne le délai actuel et l'augmente pour le prochain appel."""
+        delay = self._backoff
+        self._backoff = min(self._backoff * 2, self._max_backoff)
+        return delay
 
     def is_on(self) -> bool:
         try:
@@ -139,15 +172,27 @@ class HueSink:
 
             # Delta filter
             prev = self.last.get(lid, (0, 0, 0))
-            if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < 15:
+            if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < DELTA_THRESHOLD_HUE:
                 continue
             self.last[lid] = (r, g, b)
 
             if r + g + b < 30:
+                # Scène noire → brightness minimum
+                try:
+                    requests.put(
+                        f"http://{self.bridge}/api/{self.token}/lights/{lid}/state",
+                        json={"bri": 1, "transitiontime": self.transition_ds},
+                        timeout=1.0,
+                    )
+                except Exception:
+                    pass
                 continue
 
             x, y = rgb_to_xy(r, g, b)
-            bri = min(254, max(m.get("brightness", 200), (r + g + b) // 3))
+            max_bri = NIGHT_HUE_BRI if is_night() else m.get("brightness", 200)
+            # Brightness proportionnelle à la luminosité de la couleur boostée
+            scene_bri = max(r, g, b) * max_bri // 255
+            bri = min(254, max(1, scene_bri))
             try:
                 requests.put(
                     f"http://{self.bridge}/api/{self.token}/lights/{lid}/state",
@@ -163,8 +208,9 @@ class OpenRGBSink:
         self.client = None
         self.mapping = None
         self.last = {}
+        self._last_connect_attempt = 0.0
 
-    def connect(self):
+    def connect(self) -> bool:
         if not HAS_OPENRGB:
             print("[openrgb] openrgb-python not installed, skipping")
             return False
@@ -177,10 +223,22 @@ class OpenRGBSink:
                     pass
             self.mapping = self._build_mapping()
             print(f"[openrgb] connected, {len(self.client.devices)} devices")
+            self._last_connect_attempt = time.monotonic()
             return True
         except Exception as e:
             print(f"[openrgb] connect failed: {e}")
+            self._last_connect_attempt = time.monotonic()
             return False
+
+    def reconnect_if_needed(self) -> bool:
+        """Tente une reconnexion si déconnecté (max 1 tentative / 30s)."""
+        if self.client is not None:
+            return True
+        now = time.monotonic()
+        if now - self._last_connect_attempt < 30.0:
+            return False
+        print("[openrgb] attempting reconnect...")
+        return self.connect()
 
     def _build_mapping(self) -> dict:
         ram_indices = []
@@ -201,26 +259,39 @@ class OpenRGBSink:
                         zone_map["jrgb"] = (i, zi)
         return {"ram_indices": ram_indices, "zone_map": zone_map}
 
+    def set_static(self, r: int, g: int, b: int):
+        """Set une couleur statique sur tous les devices."""
+        if not self.client:
+            return
+        color = RGBColor(r, g, b)
+        for i in range(len(self.client.devices)):
+            try:
+                self.client.devices[i].set_color(color)
+            except Exception:
+                self._mark_disconnected()
+                return
+        self.last = {"dom": (r, g, b)}
+
     def push(self, colors: dict[str, tuple[int, int, int]]):
         if not self.client or not self.mapping:
             return
 
-        # La couleur dominante est déjà calculée en amont (unified)
         r, g, b = next(iter(colors.values()))
 
         # Delta check
         prev = self.last.get("dom", (0, 0, 0))
-        if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < 8:
+        if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < DELTA_THRESHOLD_ORGB:
             return
         self.last["dom"] = (r, g, b)
 
-        if r + g + b < 15:
-            return
+        if is_night():
+            r = int(r * NIGHT_LED_SCALE)
+            g = int(g * NIGHT_LED_SCALE)
+            b = int(b * NIGHT_LED_SCALE)
 
         color = RGBColor(r, g, b)
 
-        # Préparer TOUTES les commandes puis les envoyer le plus vite possible
-        # 1. Carte mère : set_color sur le device entier (une seule commande = toutes zones d'un coup)
+        # Carte mère : set_color sur le device entier
         mobo_idx = next(
             (i for i, d in enumerate(self.client.devices) if d.type == DeviceType.MOTHERBOARD),
             None
@@ -229,14 +300,27 @@ class OpenRGBSink:
             try:
                 self.client.devices[mobo_idx].set_color(color)
             except Exception:
-                pass
+                self._mark_disconnected()
+                return
 
-        # 2. RAM : toutes les barrettes
+        # RAM : toutes les barrettes
         for ri in self.mapping["ram_indices"]:
             try:
                 self.client.devices[ri].set_color(color)
             except Exception:
-                pass
+                self._mark_disconnected()
+                return
+
+    def _mark_disconnected(self):
+        """Marque la connexion comme perdue pour trigger un reconnect."""
+        print("[openrgb] connection lost, will reconnect")
+        try:
+            self.client.disconnect()
+        except Exception:
+            pass
+        self.client = None
+        self.mapping = None
+        self.last = {}
 
 
 def run():
@@ -265,31 +349,36 @@ def run():
 
     last_tv_check = 0.0
     tv_on = False
+    idle_color_set = False
 
     print(f"[unified-sync] started — Hue: {hue_cfg['bridge_host']}, OpenRGB: {'yes' if orgb_ok else 'no'}")
 
     while not stop:
         t0 = time.monotonic()
 
+        # OpenRGB reconnect auto si déconnecté
+        if not orgb_ok:
+            orgb_ok = orgb.reconnect_if_needed()
+
         # TV power check every 15s
         if t0 - last_tv_check > 15.0:
             tv_on = tv.is_on()
             last_tv_check = t0
-            if not tv_on:
-                if orgb_ok:
-                    for i in range(len(orgb.client.devices)):
-                        try:
-                            orgb.client.devices[i].set_color(RGBColor(20, 10, 30))
-                        except Exception:
-                            pass
+            if not tv_on and not idle_color_set and orgb_ok:
+                orgb.set_static(*IDLE_COLOR)
+                idle_color_set = True
+                print(f"[unified-sync] TV off → idle blue")
 
         if not tv_on:
             time.sleep(15.0)
             continue
 
+        idle_color_set = False
+
         data = tv.fetch_ambilight()
         if data is None:
-            time.sleep(0.3)
+            delay = tv.get_backoff()
+            time.sleep(delay)
             continue
 
         layer = data.get("layer1", {})
@@ -297,7 +386,7 @@ def run():
         if not layer.get("left") or not layer.get("right"):
             continue
 
-        # Prolongation mode: prendre le pixel du BAS de chaque côté
+        # Prolongation mode : pixels du bas gauche + droit, moyenne
         left_zone = layer["left"]
         right_zone = layer["right"]
         bottom_left_key = str(max(int(k) for k in left_zone.keys()))
@@ -306,21 +395,14 @@ def run():
         bl = left_zone[bottom_left_key]
         br = right_zone[bottom_right_key]
 
-        color_left = boost_color(bl["r"], bl["g"], bl["b"])
-        color_right = boost_color(br["r"], br["g"], br["b"])
+        # Moyenne brute AVANT boost (pour garder la fidélité)
+        avg_r = (bl["r"] + br["r"]) // 2
+        avg_g = (bl["g"] + br["g"]) // 2
+        avg_b = (bl["b"] + br["b"]) // 2
 
-        # PC LEDs: moyenne des deux bas
-        pc_r = (color_left[0] + color_right[0]) // 2
-        pc_g = (color_left[1] + color_right[1]) // 2
-        pc_b = (color_left[2] + color_right[2]) // 2
+        dominant = boost_color(avg_r, avg_g, avg_b)
 
-        if color_left[0] + color_left[1] + color_left[2] < 15 and \
-           color_right[0] + color_right[1] + color_right[2] < 15:
-            continue
-
-        # Moyenne des deux pixels bas → même couleur partout
-        bottom_avg = (pc_r, pc_g, pc_b)
-        unified = {"left": bottom_avg, "right": bottom_avg, "top": bottom_avg}
+        unified = {"left": dominant, "right": dominant, "top": dominant}
 
         # Push OpenRGB d'abord (local, instantané)
         if orgb_ok:

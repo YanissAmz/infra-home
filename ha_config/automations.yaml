@@ -12,6 +12,7 @@
     to: 'on'
   condition:
   - condition: time
+    after: '06:00:00'
     before: '22:00:00'
   action:
   - service: light.turn_on
@@ -20,32 +21,74 @@
     data:
       effect: Vivid
       brightness: 255
+    continue_on_error: true
+  - action: shell_command.ambilight_brightness_high
+    continue_on_error: true
 - id: night_mode_ambilight
   alias: 22h → Ambilight doux
   triggers:
   - at: '22:00:00'
     trigger: time
+  - trigger: homeassistant
+    event: start
   conditions:
-  - condition: not
-    conditions:
-    - condition: state
-      entity_id: media_player.bedroom_tv
-      state: 'off'
+  - condition: time
+    after: '22:00:00'
+    before: '06:00:00'
   actions:
-  - target:
+  - action: shell_command.ambilight_power_on
+    continue_on_error: true
+  - delay: '00:00:02'
+  - action: light.turn_on
+    target:
       entity_id: light.philips_ambilight_ambilight
     data:
       effect: Natural
       brightness: 100
-    action: light.turn_on
+    continue_on_error: true
+  - action: shell_command.ambilight_natural
+    continue_on_error: true
+  - delay: '00:00:02'
+  - action: shell_command.ambilight_brightness_low
+    continue_on_error: true
   - action: light.turn_on
     target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
+      entity_id: light.hue_color_lamp_1
     data:
-      brightness: 60
-  # TV OLED brightness not controllable via API
+      brightness: 20
+- id: morning_mode_ambilight
+  alias: 6h → Ambilight jour
+  triggers:
+  - at: '06:00:00'
+    trigger: time
+  - trigger: homeassistant
+    event: start
+  conditions:
+  - condition: time
+    after: '06:00:00'
+    before: '22:00:00'
+  actions:
+  - action: shell_command.ambilight_power_on
+    continue_on_error: true
+  - delay: '00:00:02'
+  - action: light.turn_on
+    target:
+      entity_id: light.philips_ambilight_ambilight
+    data:
+      effect: Vivid
+      brightness: 255
+    continue_on_error: true
+  - action: shell_command.ambilight_vivid
+    continue_on_error: true
+  - delay: '00:00:02'
+  - action: shell_command.ambilight_brightness_high
+    continue_on_error: true
+  - action: light.turn_on
+    target:
+      entity_id: light.hue_color_lamp_1
+    data:
+      brightness: 200
+    continue_on_error: true
 - id: tv_on_after_22h
   alias: TV ON après 22h → Ambilight doux
   trigger:
@@ -61,22 +104,31 @@
   condition:
   - condition: time
     after: '22:00:00'
-    before: 06:00:00
+    before: '06:00:00'
   action:
+  - action: shell_command.ambilight_power_on
+    continue_on_error: true
+  - delay: '00:00:02'
   - service: light.turn_on
     target:
       entity_id: light.philips_ambilight_ambilight
     data:
-      effect: Standard
+      effect: Natural
       brightness: 100
+    continue_on_error: true
+  - action: shell_command.ambilight_natural
+    continue_on_error: true
+  - delay: '00:00:02'
+  - action: shell_command.ambilight_brightness_low
+    continue_on_error: true
+  - delay: '00:00:02'
+  - action: shell_command.tv_picture_personal
+    continue_on_error: true
   - service: light.turn_on
     target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
+      entity_id: light.hue_color_lamp_1
     data:
-      brightness: 60
-  - service: shell_command.tv_brightness_low
+      brightness: 20
 - id: tv_off_lights_off
   alias: TV OFF → Hue OFF
   trigger:

@@ -105,17 +105,22 @@ Fichier de reprise. Dernière mise à jour : 2026-04-06 soir.
 
 ### Phase 5 — Calibrage image TV ✅
 
-- [x] Mode image : **Filmmaker Mode** (activé manuellement sur TV)
-- [x] Réglages appliqués via API JointSPACE (`menuitems/settings/update`) :
-  - Netteté → 0
-  - Couleur → 55
-  - Réduction du bruit → OFF
-  - Amélioration des couleurs → OFF
-  - Mode contraste → Normal
-  - Style de mouvement → OFF
-  - Perfect Natural Motion → 0
-- [x] Note : la TV peut revenir à Crystal Clear si on change de source/app — refaire via API si besoin
-- Node IDs utiles : Picture Style=2130968797, Colour=2130968794, Sharpness=2130968796, Noise=2130968749, Contrast=2130968626, Motion=2130968747
+- [x] **2 profils configurés manuellement** (API ne peut PAS modifier les réglages image) :
+  - **Filmmaker Mode** (jour) : netteté 0, bruit OFF, amélioration couleurs OFF, mouvement OFF, PNR OFF
+  - **Personnalisé** (nuit) : idem + luminosité OLED réduite
+- [x] Note : API `menuitems/settings/update` retourne 200 mais n'applique PAS les réglages image (firmware verrouille). Seul `ambilight_brightness` (node 2130968780) fonctionne via API.
+- [x] Changement de profil image non automatisable via API (même blocage)
+- Node IDs (structure uniquement, écriture ignorée) : Picture Style=2130968797, Colour=2130968794, Sharpness=2130968796, Noise=2130968749, Contrast=2130968626, Motion=2130968747
+
+### Phase 5b — Mode nuit automatique ✅
+
+- [x] **Ambilight** : Vivid→Natural à 22h + brightness TV 8→3/10 via API `menuitems/settings/update`
+- [x] **Hue lamp** : brightness capée à 20/254 la nuit (sync + automations)
+- [x] **LEDs PC OpenRGB** : 5% brightness la nuit
+- [x] **Script sync** (`ambilight_unified_sync.py`) : `is_night()` 22h-6h, cache 60s, cap Hue + dim LEDs
+- [x] **Automations HA** : trigger `time: 22:00` + `homeassistant: start` (rattrapage si restart après 22h)
+- [x] **Shell commands** : `ambilight_brightness_low/high`, `ambilight_natural/vivid`, `ambilight_power_on` dans HA
+- [x] Profil image Filmmaker↔Personnalisé = **manuel** (API bloquée par firmware)
 
 ---
 
@@ -281,18 +286,52 @@ infra-home/
 - [x] GLM-4.7-Flash officiel en cours de téléchargement (MoE 30B-A3B, 19GB)
 - [x] TurboQuant + turboquant-gpu installés dans `.venv`
 
-### Phase 2 — Benchmark comparatif 🔶 EN COURS
-- [x] Script `benchmark_models.py` créé (coding, tool calling, reasoning, uncensored, vitesse, VRAM)
-- [ ] **Benchmark lancé** sur 8 modèles (~40 min)
-- [ ] Résultats → tableau comparatif + recommandation par use case
+### Phase 2a — Benchmark v1 (basique) ✅
+- [x] Script `benchmark_models.py` créé (coding pattern, tool keyword, reasoning classique, uncensored)
+- [x] Résultat : tests trop faciles, tous les modèles à 19/20 — ne discrimine pas
+- [x] Utilité : classement **vitesse + VRAM** fiable (objectif)
+- [x] Résultats : `results/benchmark_20260406.md`
+
+### Phase 2b — Benchmark v2 (robuste) 🔶 EN COURS (3/10 modèles)
+- [x] Script `benchmark_v2.py` créé — code exécuté (sandbox), JSON strict, math originales, uncensored gradué
+- [x] Score /270 (Code /90 + Tools /50 + Reason /65 + Uncens /65)
+- [x] **3 modèles testés** :
+
+| # | Modèle | Code /90 | Tools /50 | Reason /65 | Uncens /65 | tok/s | Total /270 |
+|---|--------|----------|-----------|------------|------------|-------|------------|
+| 1 | **glm-4.7-flash** | 80 | 35 | 50 | **65** | 104 | **230** |
+| 2 | qwen3.5:35b-a3b MoE | **90** | 35 | 50 | 45 | 45 | **220** |
+| 3 | qwen3.5:27b dense | **90** | 35 | 50 | 45 | 35 | **220** |
+
+- [ ] **7 modèles restants** : gemma4:31b, gemma4:26b, qwen3-coder:30b, huihui_ai/qwen3.5-abliterated, huihui_ai/glm-abliterated, gag0/opus-distil, qwen3.5:0.8b
+- [ ] Relancer : `cd ~/projects/efficient-llm-pipeline && .venv/bin/python scripts/benchmark_v2.py`
+
+### Modèles installés (10) — après cleanup 2026-04-06
+
+| Modèle | Rôle | tok/s | VRAM |
+|--------|------|-------|------|
+| qwen3-coder:30b | Speed/Code | 147 | 20.2GB |
+| huihui_ai/glm-4.7-flash-abliterated | Uncensored rapide | 107 | 18.8GB |
+| glm-4.7-flash | Agent | 104 | 20.7GB |
+| gemma4:26b (MoE, NOUVEAU) | Reasoning + Multimodal | 83 | 18.8GB |
+| qwen3.5:35b-a3b-q4_K_M | All-round (défaut) | 45 | 23.7GB |
+| huihui_ai/qwen3.5-abliterated:27b | Uncensored Qwen | 36 | 24.0GB |
+| gag0/qwen35-opus-distil:27b | Distillation Opus | 35 | 22.9GB |
+| qwen3.5:27b-32k | Dense Qwen ref | 35 | 24.0GB |
+| gemma4:31b | Multimodal dense | 28 | 23.3GB |
+| qwen3.5:0.8b | Test/debug | 282 | 3.0GB |
+
+Supprimés : qwq-32b-32k (12 tok/s, remplacé par gemma4:26b), qwen2.5:0.5b, gemma4:31b-32k, jackrong:27b-32k, uncensored-glm:flash, uncensored-qwen3.5:27b, qwen3.5:27b, qwq-32b
 
 ### Phase 3 — TurboQuant ⏳
+- [x] turboquant + turboquant-gpu installés dans `.venv`
 - [ ] Mesurer gain KV cache TurboQuant 3-bit vs Ollama q4_0
 - [ ] Évaluer contexte max possible sur modèle 27B
 
 ### Phase 4 — Config finale ⏳
 - [ ] Alias profils (agent/fast/think/free)
 - [ ] Mise à jour Discord bot, Open WebUI, OpenCode, Fabric
+- [ ] Test live 2-3 modèles sur OpenCode
 
 **Plan détaillé** : `/home/yaniss/.claude/plans/memoized-dazzling-nebula.md`
 

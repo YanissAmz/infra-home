@@ -13,6 +13,43 @@ shell_command:
   ambisync_restart: "echo ambisync_restart > /config/commands/sync_$(date +%s).cmd"
   ambisync_stop: "echo ambisync_stop > /config/commands/sync_$(date +%s).cmd"
   ambisync_start: "echo ambisync_start > /config/commands/sync_$(date +%s).cmd"
+  # Ambilight style via JointSPACE API (fallback when custom_ambilight fails)
+  ambilight_natural: >-
+    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
+    -X POST 'https://192.168.1.26:1926/6/ambilight/currentconfiguration'
+    -H 'Content-Type: application/json'
+    -d '{"styleName":"FOLLOW_VIDEO","isExpert":false,"menuSetting":"NATURAL"}'
+  ambilight_vivid: >-
+    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
+    -X POST 'https://192.168.1.26:1926/6/ambilight/currentconfiguration'
+    -H 'Content-Type: application/json'
+    -d '{"styleName":"FOLLOW_VIDEO","isExpert":false,"menuSetting":"VIVID"}'
+  ambilight_power_on: >-
+    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
+    -X POST 'https://192.168.1.26:1926/6/ambilight/power'
+    -H 'Content-Type: application/json'
+    -d '{"power":"On"}'
+  ambilight_brightness_low: >-
+    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
+    -X POST 'https://192.168.1.26:1926/6/menuitems/settings/update'
+    -H 'Content-Type: application/json'
+    -d '{"values":[{"value":{"Nodeid":2130968780,"Controllable":true,"Available":true,"data":{"value":3}}}]}'
+  ambilight_brightness_high: >-
+    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
+    -X POST 'https://192.168.1.26:1926/6/menuitems/settings/update'
+    -H 'Content-Type: application/json'
+    -d '{"values":[{"value":{"Nodeid":2130968780,"Controllable":true,"Available":true,"data":{"value":8}}}]}'
+  # Picture style: 0=Personnalisé, 4=Filmmaker (à confirmer)
+  tv_picture_personal: >-
+    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
+    -X POST 'https://192.168.1.26:1926/6/menuitems/settings/update'
+    -H 'Content-Type: application/json'
+    -d '{"values":[{"value":{"Nodeid":2130968797,"Controllable":true,"Available":true,"data":{"selected_item":0}}}]}'
+  tv_picture_filmmaker: >-
+    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
+    -X POST 'https://192.168.1.26:1926/6/menuitems/settings/update'
+    -H 'Content-Type: application/json'
+    -d '{"values":[{"value":{"Nodeid":2130968797,"Controllable":true,"Available":true,"data":{"selected_item":4}}}]}'
   # Firestick apps via ADB
   firestick_hd_stremio: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.stremio.one/.MainActivity"
   firestick_hd_youtube: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.amazon.firetv.youtube/.StartActivity"

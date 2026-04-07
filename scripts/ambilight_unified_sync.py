@@ -5,11 +5,16 @@ ambilight_unified_sync.py — sync unique : Ambilight → Hue + OpenRGB.
 Un seul fetch TV, pousse simultanément vers Hue bridge et OpenRGB LEDs PC.
 Sélection de la couleur la plus saturée de l'écran (pas de moyenne).
 Reconnexion auto TV (backoff exponentiel) et OpenRGB.
+
+Hue output: Entertainment API (DTLS streaming) si configuré,
+sinon fallback REST API.
 """
 
 from __future__ import annotations
 
 import signal
+import socket
+import struct
 import sys
 import time
 import threading
@@ -38,6 +43,10 @@ IDLE_COLOR = (0, 40, 255)
 DELTA_THRESHOLD_ORGB = 25
 DELTA_THRESHOLD_HUE = 25
 
+# Entertainment streaming
+ENTERTAINMENT_PORT = 2100
+HUESTREAM_HEADER = b"HueStream"
+
 _night_cache: bool = False
 _night_cache_ts: float = 0.0
 
@@ -58,6 +67,13 @@ try:
     HAS_OPENRGB = True
 except ImportError:
     HAS_OPENRGB = False
+
+# DTLS import (optional — fallback to REST if missing)
+try:
+    from mbedtls.tls import DTLSConfiguration, ClientContext
+    HAS_DTLS = True
+except ImportError:
+    HAS_DTLS = False
 
 
 def load_config() -> dict:
@@ -152,6 +168,180 @@ class TVConnection:
         self.session = requests.Session()
         self.session.auth = self.auth
         self.session.verify = False
+
+
+class HueEntertainmentSink:
+    """Stream colors to Hue via Entertainment API (DTLS/UDP, V1 protocol)."""
+
+    def __init__(self, bridge_host: str, token: str, client_key: str,
+                 group_id: str, mapping: list):
+        self.bridge = bridge_host
+        self.token = token
+        self.client_key = client_key
+        self.group_id = group_id
+        self.mapping = mapping
+        self._dtls_sock = None
+        self._seq = 0
+        self._connected = False
+        self.last = {}
+        self._last_send_ts = 0.0
+
+    def connect(self) -> bool:
+        if not HAS_DTLS:
+            print("[hue-ent] python-mbedtls not installed")
+            return False
+        if not self._activate_stream():
+            return False
+        if not self._dtls_connect():
+            self._deactivate_stream()
+            return False
+        self._connected = True
+        self._last_send_ts = time.monotonic()
+        print("[hue-ent] connected — DTLS streaming active")
+        return True
+
+    def _activate_stream(self) -> bool:
+        self._deactivate_stream()
+        time.sleep(1.0)
+        # Allumer les lampes avant d'activer le stream
+        for m in self.mapping:
+            try:
+                requests.put(
+                    f"http://{self.bridge}/api/{self.token}/lights/{m['light_id']}/state",
+                    json={"on": True, "bri": 254}, timeout=2,
+                )
+            except Exception:
+                pass
+        time.sleep(1.0)
+        try:
+            r = requests.put(
+                f"http://{self.bridge}/api/{self.token}/groups/{self.group_id}",
+                json={"stream": {"active": True}}, timeout=5,
+            )
+            data = r.json()
+            if isinstance(data, list) and data and "success" in data[0]:
+                print(f"[hue-ent] streaming activated on group {self.group_id}")
+                time.sleep(0.5)
+                return True
+            print(f"[hue-ent] activate failed: {data}")
+            return False
+        except Exception as e:
+            print(f"[hue-ent] activate error: {e}")
+            return False
+
+    def _deactivate_stream(self):
+        try:
+            requests.put(
+                f"http://{self.bridge}/api/{self.token}/groups/{self.group_id}",
+                json={"stream": {"active": False}}, timeout=3,
+            )
+        except Exception:
+            pass
+
+    def _dtls_connect(self) -> bool:
+        try:
+            psk_key = bytes.fromhex(self.client_key)
+            conf = DTLSConfiguration(
+                validate_certificates=False,
+                pre_shared_key=(self.token, psk_key),
+                ciphers=["TLS-PSK-WITH-AES-128-GCM-SHA256"],
+            )
+            ctx = ClientContext(conf)
+            udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_sock.settimeout(5.0)
+            udp_sock.connect((self.bridge, ENTERTAINMENT_PORT))
+            self._dtls_sock = ctx.wrap_socket(udp_sock, server_hostname=None)
+            self._dtls_sock.do_handshake()
+            print(f"[hue-ent] DTLS handshake OK, cipher={self._dtls_sock.cipher()}")
+            return True
+        except Exception as e:
+            print(f"[hue-ent] DTLS handshake failed: {e}")
+            self._dtls_sock = None
+            return False
+
+    def disconnect(self):
+        self._connected = False
+        if self._dtls_sock:
+            try:
+                self._dtls_sock.close()
+            except Exception:
+                pass
+            self._dtls_sock = None
+        self._deactivate_stream()
+        print("[hue-ent] disconnected")
+
+    def reconnect(self) -> bool:
+        self.disconnect()
+        time.sleep(1.0)
+        return self.connect()
+
+    def push(self, colors: dict[str, tuple[int, int, int]]):
+        if not self._connected or not self._dtls_sock:
+            return
+
+        # Build V1 packet: header + per-light data
+        pkt = bytearray(HUESTREAM_HEADER)
+        pkt += bytes([0x01, 0x00, self._seq & 0xFF, 0x00, 0x00, 0x00, 0x00])
+
+        has_data = False
+        for m in self.mapping:
+            side = m["side"]
+            if side not in colors:
+                continue
+            r, g, b = colors[side]
+            lid = m["light_id"]
+
+            # Delta filter
+            prev = self.last.get(lid, (0, 0, 0))
+            if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < DELTA_THRESHOLD_HUE:
+                continue
+            self.last[lid] = (r, g, b)
+
+            # Night mode / brightness scaling
+            if is_night():
+                scale = NIGHT_HUE_BRI / 255.0
+            else:
+                scale = m.get("brightness", 200) / 254.0
+            r = int(r * scale)
+            g = int(g * scale)
+            b = int(b * scale)
+
+            # V1: device_type(1) + light_id(2) + R(2) + G(2) + B(2)
+            pkt.append(0x00)
+            pkt += struct.pack(">H", lid)
+            pkt += struct.pack(">HHH", r * 257, g * 257, b * 257)
+            has_data = True
+
+        if not has_data:
+            return
+
+        self._seq = (self._seq + 1) & 0xFF
+        try:
+            self._dtls_sock.send(bytes(pkt))
+            self._last_send_ts = time.monotonic()
+        except Exception:
+            self._connected = False
+
+    def keepalive(self):
+        if not self._connected or not self._dtls_sock:
+            return
+        if time.monotonic() - self._last_send_ts < 2.0:
+            return
+        # Resend last known colors
+        pkt = bytearray(HUESTREAM_HEADER)
+        pkt += bytes([0x01, 0x00, self._seq & 0xFF, 0x00, 0x00, 0x00, 0x00])
+        for lid, (r, g, b) in self.last.items():
+            pkt.append(0x00)
+            pkt += struct.pack(">H", lid)
+            pkt += struct.pack(">HHH", r * 257, g * 257, b * 257)
+        if len(pkt) <= 16:
+            return
+        self._seq = (self._seq + 1) & 0xFF
+        try:
+            self._dtls_sock.send(bytes(pkt))
+            self._last_send_ts = time.monotonic()
+        except Exception:
+            self._connected = False
 
 
 class HueSink:
@@ -330,10 +520,30 @@ def run():
 
     tv = TVConnection(tv_cfg["host"], tv_cfg["device_id"], tv_cfg["auth_key"])
 
-    hue = HueSink(
-        hue_cfg["bridge_host"], hue_cfg["token"],
-        cfg["mapping"], cfg.get("transition_ds", 2)
-    )
+    # Hue: prefer Entertainment API (DTLS) if configured, else REST fallback
+    hue_ent = None
+    hue_rest = None
+    use_entertainment = False
+
+    client_key = hue_cfg.get("client_key")
+    group_id = hue_cfg.get("entertainment_group_id")
+
+    if client_key and group_id and HAS_DTLS:
+        hue_ent = HueEntertainmentSink(
+            hue_cfg["bridge_host"], hue_cfg["token"],
+            client_key, str(group_id), cfg["mapping"],
+        )
+        if hue_ent.connect():
+            use_entertainment = True
+        else:
+            print("[unified-sync] Entertainment connect failed, falling back to REST")
+            hue_ent = None
+
+    if not use_entertainment:
+        hue_rest = HueSink(
+            hue_cfg["bridge_host"], hue_cfg["token"],
+            cfg["mapping"], cfg.get("transition_ds", 2)
+        )
 
     orgb = OpenRGBSink()
     orgb_ok = orgb.connect()
@@ -347,11 +557,12 @@ def run():
     signal.signal(signal.SIGINT, _sig)
     signal.signal(signal.SIGTERM, _sig)
 
-    last_tv_check = 0.0
-    tv_on = False
     idle_color_set = False
+    ent_reconnect_ts = 0.0
+    tv_fail_count = 0
 
-    print(f"[unified-sync] started — Hue: {hue_cfg['bridge_host']}, OpenRGB: {'yes' if orgb_ok else 'no'}")
+    mode_label = "Entertainment DTLS" if use_entertainment else "REST"
+    print(f"[unified-sync] started — Hue: {hue_cfg['bridge_host']} ({mode_label}), OpenRGB: {'yes' if orgb_ok else 'no'}")
 
     while not stop:
         t0 = time.monotonic()
@@ -360,30 +571,41 @@ def run():
         if not orgb_ok:
             orgb_ok = orgb.reconnect_if_needed()
 
-        # TV power check every 15s
-        if t0 - last_tv_check > 15.0:
-            tv_on = tv.is_on()
-            last_tv_check = t0
-            if not tv_on and not idle_color_set and orgb_ok:
-                orgb.set_static(*IDLE_COLOR)
-                idle_color_set = True
-                print(f"[unified-sync] TV off → idle blue")
-
-        if not tv_on:
-            time.sleep(15.0)
-            continue
-
-        idle_color_set = False
+        # Entertainment reconnect if disconnected
+        if use_entertainment and hue_ent and not hue_ent._connected:
+            if t0 - ent_reconnect_ts > 30.0:
+                ent_reconnect_ts = t0
+                if not hue_ent.reconnect():
+                    print("[hue-ent] reconnect failed, retry in 30s")
 
         data = tv.fetch_ambilight()
         if data is None:
-            delay = tv.get_backoff()
-            time.sleep(delay)
+            tv_fail_count += 1
+            if tv_fail_count >= 3:
+                # TV off
+                if not idle_color_set:
+                    if orgb_ok:
+                        orgb.set_static(*IDLE_COLOR)
+                    idle_color_set = True
+                    print("[unified-sync] TV off → idle blue")
+                if use_entertainment and hue_ent:
+                    hue_ent.keepalive()
+                time.sleep(2.0)
+            else:
+                time.sleep(tv.get_backoff())
             continue
+
+        if tv_fail_count >= 3 and idle_color_set:
+            print("[unified-sync] TV back on")
+        tv_fail_count = 0
+        tv._backoff = 0.3
+        idle_color_set = False
 
         layer = data.get("layer1", {})
 
         if not layer.get("left") or not layer.get("right"):
+            if use_entertainment and hue_ent:
+                hue_ent.keepalive()
             continue
 
         # Prolongation mode : pixels du bas gauche + droit, moyenne
@@ -404,14 +626,23 @@ def run():
 
         unified = {"left": dominant, "right": dominant, "top": dominant}
 
-        # Push OpenRGB d'abord (local, instantané)
+        # Push Hue (DTLS instantané ou REST en thread)
+        if use_entertainment and hue_ent and hue_ent._connected:
+            hue_ent.push(unified)
+            hue_ent.keepalive()
+        elif hue_rest:
+            threading.Thread(target=hue_rest.push, args=(unified,), daemon=True).start()
+
+        # Push OpenRGB
         if orgb_ok:
             orgb.push(unified)
 
-        # Push Hue en parallèle (réseau, plus lent mais non-bloquant)
-        threading.Thread(target=hue.push, args=(unified,), daemon=True).start()
+        # No sleep — loop as fast as TV allows
 
-        # No sleep — fire next request as soon as possible
+
+    # Cleanup
+    if hue_ent:
+        hue_ent.disconnect()
 
 
 def main():

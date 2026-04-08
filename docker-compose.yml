@@ -1,7 +1,6 @@
 # Home automation stack — tour GPU
-# Services: Home Assistant + Pi-hole + Mosquitto + Ambisync
+# Services: Home Assistant + Mosquitto + Ambisync
 # Lancer: docker compose up -d
-# IMPORTANT: avant de démarrer Pi-hole, libérer port 53 (désactiver systemd-resolved stub)
 
 services:
   homeassistant:
@@ -15,24 +14,28 @@ services:
     environment:
       - TZ=Europe/Paris
 
-  pihole:
-    container_name: pihole
-    image: pihole/pihole:latest
-    restart: unless-stopped
-    ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-      - "8081:80/tcp"          # web admin sur 8081 (80 laissé libre pour HA ou futur reverse proxy)
-    environment:
-      - TZ=Europe/Paris
-      - FTLCONF_webserver_api_password=${PIHOLE_PASSWORD}
-      - FTLCONF_dns_listeningMode=all
-    volumes:
-      - ./pihole/etc-pihole:/etc/pihole
-      - ./pihole/etc-dnsmasq.d:/etc/dnsmasq.d
-    cap_add:
-      - NET_ADMIN
-      - SYS_NICE
+  # --- Pi-hole désactivé temporairement ---
+  # Raison: bloque Google Analytics et services utiles, tour pas H24, gain marginal vs debloat ADB + uBlock
+  # Réactiver: décommenter le bloc + libérer port 53 (désactiver systemd-resolved stub)
+  #
+  # pihole:
+  #   container_name: pihole
+  #   image: pihole/pihole:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "53:53/tcp"
+  #     - "53:53/udp"
+  #     - "8081:80/tcp"
+  #   environment:
+  #     - TZ=Europe/Paris
+  #     - FTLCONF_webserver_api_password=${PIHOLE_PASSWORD}
+  #     - FTLCONF_dns_listeningMode=all
+  #   volumes:
+  #     - ./pihole/etc-pihole:/etc/pihole
+  #     - ./pihole/etc-dnsmasq.d:/etc/dnsmasq.d
+  #   cap_add:
+  #     - NET_ADMIN
+  #     - SYS_NICE
 
   mosquitto:
     container_name: mosquitto

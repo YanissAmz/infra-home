@@ -12,6 +12,7 @@ sinon fallback REST API.
 
 from __future__ import annotations
 
+import json
 import signal
 import socket
 import struct
@@ -40,8 +41,12 @@ NIGHT_LED_SCALE = 0.05  # 5% brightness for OpenRGB LEDs at night
 IDLE_COLOR = (0, 40, 255)
 
 # Delta filter — seuil pour éviter micro-tremblements
-DELTA_THRESHOLD_ORGB = 25
-DELTA_THRESHOLD_HUE = 25
+DELTA_THRESHOLD_ORGB = 15
+DELTA_THRESHOLD_HUE = 15
+DELTA_THRESHOLD_GOVEE = 15
+
+# Govee LAN API
+GOVEE_LAN_PORT = 4003
 
 # Entertainment streaming
 ENTERTAINMENT_PORT = 2100
@@ -101,8 +106,8 @@ def boost_color(r: int, g: int, b: int) -> tuple[int, int, int]:
     """Boost fidèle à l'Ambilight : couleurs renforcées + luminosité proportionnelle.
     Scène sombre → LEDs sombres. Scène lumineuse → LEDs lumineuses."""
     mx = max(r, g, b)
-    if mx < 5:
-        return 0, 0, 0
+    if mx < 3:
+        return 1, 1, 1  # minimum dim plutôt qu'éteint
     # Luminosité relative : à quel point la scène est lumineuse (0.0-1.0)
     brightness = min(1.0, mx / API_MAX)
     # Normaliser les proportions entre canaux (teinte + saturation relative)
@@ -393,6 +398,65 @@ class HueSink:
                 pass
 
 
+class GoveeSink:
+    """Stream colors to Govee LED strip via LAN API (UDP, <1ms)."""
+
+    def __init__(self, ip: str, brightness: int = 100):
+        self.ip = ip
+        self.brightness = brightness
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.last = (0, 0, 0)
+
+    def push(self, colors: dict[str, tuple[int, int, int]]):
+        r, g, b = next(iter(colors.values()))
+
+        # Delta filter
+        prev = self.last
+        if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < DELTA_THRESHOLD_GOVEE:
+            return
+        self.last = (r, g, b)
+
+        # Brightness scaling + night mode
+        if is_night():
+            scale = NIGHT_LED_SCALE
+        else:
+            scale = self.brightness / 100.0
+        r = int(r * scale)
+        g = int(g * scale)
+        b = int(b * scale)
+
+        msg = json.dumps({'msg': {'cmd': 'colorwc', 'data': {
+            'color': {'r': r, 'g': g, 'b': b}, 'colorTemInKelvin': 0,
+        }}})
+        try:
+            self._sock.sendto(msg.encode(), (self.ip, GOVEE_LAN_PORT))
+        except Exception:
+            pass
+
+    def set_static(self, r: int, g: int, b: int):
+        msg = json.dumps({'msg': {'cmd': 'colorwc', 'data': {
+            'color': {'r': r, 'g': g, 'b': b}, 'colorTemInKelvin': 0,
+        }}})
+        try:
+            self._sock.sendto(msg.encode(), (self.ip, GOVEE_LAN_PORT))
+            self.last = (r, g, b)
+        except Exception:
+            pass
+
+    def turn_on(self):
+        msg = json.dumps({'msg': {'cmd': 'turn', 'data': {'value': 1}}})
+        try:
+            self._sock.sendto(msg.encode(), (self.ip, GOVEE_LAN_PORT))
+        except Exception:
+            pass
+        # Forcer luminosité hardware à 100%
+        msg = json.dumps({'msg': {'cmd': 'brightness', 'data': {'value': 100}}})
+        try:
+            self._sock.sendto(msg.encode(), (self.ip, GOVEE_LAN_PORT))
+        except Exception:
+            pass
+
+
 class OpenRGBSink:
     def __init__(self):
         self.client = None
@@ -545,6 +609,14 @@ def run():
             cfg["mapping"], cfg.get("transition_ds", 2)
         )
 
+    # Govee LED strip (LAN API)
+    govee = None
+    govee_cfg = cfg.get("govee")
+    if govee_cfg and govee_cfg.get("ip"):
+        govee = GoveeSink(govee_cfg["ip"], govee_cfg.get("brightness", 100))
+        govee.turn_on()
+        print(f"[govee] LAN API → {govee_cfg['ip']}")
+
     orgb = OpenRGBSink()
     orgb_ok = orgb.connect()
 
@@ -562,7 +634,7 @@ def run():
     tv_fail_count = 0
 
     mode_label = "Entertainment DTLS" if use_entertainment else "REST"
-    print(f"[unified-sync] started — Hue: {hue_cfg['bridge_host']} ({mode_label}), OpenRGB: {'yes' if orgb_ok else 'no'}")
+    print(f"[unified-sync] started — Govee: {'yes' if govee else 'no'}, Hue: ({mode_label}), OpenRGB: {'yes' if orgb_ok else 'no'}")
 
     while not stop:
         t0 = time.monotonic()
@@ -584,6 +656,8 @@ def run():
             if tv_fail_count >= 3:
                 # TV off
                 if not idle_color_set:
+                    if govee:
+                        govee.set_static(*IDLE_COLOR)
                     if orgb_ok:
                         orgb.set_static(*IDLE_COLOR)
                     idle_color_set = True
@@ -608,7 +682,7 @@ def run():
                 hue_ent.keepalive()
             continue
 
-        # Prolongation mode : pixels du bas gauche + droit, moyenne
+        # Couleur dominante : moyenne pixels bas gauche + droit (extension Ambilight)
         left_zone = layer["left"]
         right_zone = layer["right"]
         bottom_left_key = str(max(int(k) for k in left_zone.keys()))
@@ -617,23 +691,41 @@ def run():
         bl = left_zone[bottom_left_key]
         br = right_zone[bottom_right_key]
 
-        # Moyenne brute AVANT boost (pour garder la fidélité)
         avg_r = (bl["r"] + br["r"]) // 2
         avg_g = (bl["g"] + br["g"]) // 2
         avg_b = (bl["b"] + br["b"]) // 2
 
         dominant = boost_color(avg_r, avg_g, avg_b)
 
-        unified = {"left": dominant, "right": dominant, "top": dominant}
+        # Govee : moyenne globale de TOUTES les zones (left+right+top)
+        # pour un halo ambiant cohérent avec l'Ambilight natif
+        all_pixels = []
+        for side_name in ("left", "right", "top"):
+            zone = layer.get(side_name, {})
+            for px in zone.values():
+                all_pixels.append((px["r"], px["g"], px["b"]))
+        if all_pixels:
+            n = len(all_pixels)
+            gr = sum(p[0] for p in all_pixels) // n
+            gg = sum(p[1] for p in all_pixels) // n
+            gb = sum(p[2] for p in all_pixels) // n
+            govee_color = boost_color(gr, gg, gb)
+        else:
+            govee_color = dominant
 
-        # Push Hue (DTLS instantané ou REST en thread)
+        unified = {"left": dominant, "right": dominant, "top": dominant}
+        govee_unified = {"avg": govee_color}
+
+        # Push ordre : Govee → Hue → OpenRGB
+        if govee:
+            govee.push(govee_unified)
+
         if use_entertainment and hue_ent and hue_ent._connected:
             hue_ent.push(unified)
             hue_ent.keepalive()
         elif hue_rest:
             threading.Thread(target=hue_rest.push, args=(unified,), daemon=True).start()
 
-        # Push OpenRGB
         if orgb_ok:
             orgb.push(unified)
 

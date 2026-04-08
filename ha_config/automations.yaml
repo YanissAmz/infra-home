@@ -87,7 +87,7 @@
     target:
       entity_id: light.hue_color_lamp_1
     data:
-      brightness: 200
+      brightness: 254
     continue_on_error: true
 - id: tv_on_after_22h
   alias: TV ON après 22h → Ambilight doux
@@ -161,7 +161,7 @@
       - light.hue_color_lamp_1
       - light.hue_color_lamp_2
     data:
-      brightness: 200
+      brightness: 254
       color_temp_kelvin: 2857
 
 # ─── TELECOMMANDE HUE ───
@@ -181,7 +181,7 @@
       - light.hue_color_lamp_1
       - light.hue_color_lamp_2
     data:
-      brightness: 200
+      brightness: 254
       color_temp_kelvin: 2857
 
 # Bouton 1 - appui long : scene gaming

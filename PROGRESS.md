@@ -1,6 +1,6 @@
 # Suivi projet — Home automation Philips + Firesticks + Hue + OpenRGB
 
-Fichier de reprise. Dernière mise à jour : 2026-04-06 soir.
+Fichier de reprise. Dernière mise à jour : 2026-04-08 soir.
 
 ---
 
@@ -8,13 +8,13 @@ Fichier de reprise. Dernière mise à jour : 2026-04-06 soir.
 
 **Phase 0 — Plan & Code** ✅ TERMINÉ
 **Phase 1 — TV + Hue + Bypass** ✅ FONCTIONNEL (ampoule + LEDs PC sync Ambilight, Zigbee stable, Ambilight mode Vif)
-**Phase 2 — Stack Docker** ✅ TERMINÉ (HA + Pi-hole + Mosquitto)
-**Phase 2b — Home Assistant config** ✅ HACS + intégrations + 5 automations
+**Phase 2 — Stack Docker** ✅ TERMINÉ (HA + Pi-hole désactivé + Mosquitto)
+**Phase 2b — Home Assistant config** ✅ HACS + intégrations + 13 automations
 **Phase 3 — Firesticks** 🔶 HD cuisine FAIT, 4K sœur À FAIRE
-**Phase 4 — LEDs boîtier PC via OpenRGB** ✅ FONCTIONNEL (sync unifié Hue + OpenRGB, couleurs boostées, zone la plus saturée)
+**Phase 4 — LEDs boîtier PC via OpenRGB** ✅ FONCTIONNEL (sync unifié Hue + OpenRGB + Govee, couleurs boostées)
 **Phase 5 — Calibrage image TV** ✅ FAIT via API JointSPACE (Filmmaker Mode)
-**Phase 6 — Écosystème chambre** ⏳ Govee strip TV + 2 lampes boule à acheter
-**Réseau — Mesh WiFi** ⏳ COMMANDÉ (amélioration réseau global + bridge Hue Ethernet chambre)
+**Phase 6 — Écosystème chambre** 🔶 Govee strip installé + synchro OK, lampes FADO E27 à acheter (support E14 renvoyé)
+**Réseau — Mesh WiFi** ✅ INSTALLÉ (TP-Link Deco, sous-réseau 192.168.68.x)
 
 ---
 
@@ -102,6 +102,26 @@ Fichier de reprise. Dernière mise à jour : 2026-04-06 soir.
 - [x] **Sync unifié** (`ambilight_unified_sync.py`) : un seul fetch TV → même couleur dominante → push PC (instantané) puis Hue (thread)
 - [x] Carte mère : `set_color` sur device entier (1 commande au lieu de zone par zone) → LEDs synchrones entre elles
 - [x] Ambilight TV en mode **Vif** pour couleurs source plus fortes
+- [x] **Race condition I2C au boot** : OpenRGB ne détectait parfois que la carte mère (pas la RAM). Fix : `ExecStartPre=/bin/sleep 5` dans le service systemd
+
+### Phase 6 — Govee strip TV 🔶
+
+- [x] Govee H618A RGBIC installé derrière la TV, contrôle LAN API (UDP port 4003)
+- [x] Intégré au sync unifié (`ambilight_unified_sync.py`) : GoveeSink class
+- [x] **Couleur Govee = moyenne globale toutes zones** (left+right+top) → halo ambiant cohérent avec Ambilight natif
+- [x] **Couleur PC/Hue = moyenne pixels bas** gauche+droit → extension Ambilight vers le bas
+- [x] Luminosité hardware Govee forcée à 100% au démarrage
+- [x] Mode nuit : Govee à 5% brightness (22h-6h)
+- [x] Delta threshold réduit à 15 (plus réactif, pas de scintillement)
+- [ ] **Lampes FADO IKEA E27** : à acheter (2×15€) — support E14 Amazon renvoyé (fiche trompeuse E26/E14)
+
+### Phase 7 — Extinction automatique + Mesh
+
+- [x] **Shutdown script** (`shutdown_lights.sh`) : éteint Govee + Hue quand le PC s'arrête (ExecStopPost)
+- [x] **Mesh WiFi installé** : TP-Link Deco, sous-réseau 192.168.68.x
+- [x] IPs mises à jour post-mesh : TV=192.168.68.52, Govee=192.168.68.55, Bridge Hue=192.168.1.59 (Livebox, routé)
+- [x] Bridge Hue firmware mis à jour via app iPhone
+- [x] Hue brightness max (254) dans sync mapping + automations HA
 
 ### Phase 5 — Calibrage image TV ✅
 
@@ -130,29 +150,31 @@ Fichier de reprise. Dernière mise à jour : 2026-04-06 soir.
 | Container | Image | Statut | Rôle |
 |---|---|---|---|
 | homeassistant | ghcr.io/home-assistant/home-assistant:stable | UP | Orchestrateur, automations, dashboard |
-| pihole | pihole/pihole:latest | UP | DNS blocker, 38 domaines custom |
+| pihole | pihole/pihole:latest | **DÉSACTIVÉ** | Commenté dans docker-compose (gain marginal vs debloat) |
 | mosquitto | eclipse-mosquitto:2 | UP | MQTT broker |
 | ambisync | infra-home-ambisync | **STOPPÉ** | Remplacé par service systemd unifié |
 
 ### Services systemd
 | Service | Statut | Rôle |
 |---|---|---|
-| `openrgb-server.service` | active, enabled | OpenRGB SDK server port 6742 |
-| `ambilight-sync.service` | active, enabled | Sync unifié Ambilight → Hue + OpenRGB |
+| `openrgb-server.service` | active, enabled | OpenRGB SDK server port 6742 (sleep 5s anti race condition I2C) |
+| `ambilight-sync.service` | active, enabled | Sync unifié Ambilight → Hue + OpenRGB + Govee, ExecStopPost éteint lumières |
 | ~~`openrgb-sync.service`~~ | disabled | Ancien sync séparé, remplacé |
 
 ---
 
-## Credentials et IPs
+## Credentials et IPs (post-mesh 2026-04-08)
 
-| Device | IP | Port | Auth |
-|---|---|---|---|
-| TV Philips 55OLED708 | 192.168.1.26 | ADB:5555, JointSPACE:1925(HTTP)/1926(HTTPS) | voir `scripts/.env.jointspace` |
-| Bridge Hue | 192.168.1.59 | 80 | voir `ambisync_config/config.yml` |
-| Tour GPU (Pi-hole/HA) | 192.168.1.32 | HA:8123, Pi-hole:8081, MQTT:1883, OpenRGB:6742 | voir `.env` |
-| Firestick HD cuisine | 192.168.1.13 | ADB:5555 | — |
-| Firestick 4K sœur | ? | ? | — |
-| Livebox W7 | 192.168.1.1 | 80/443 | voir admin Livebox |
+| Device | IP | Sous-réseau | Port | Auth |
+|---|---|---|---|---|
+| TV Philips 55OLED708 | 192.168.68.52 | Mesh Deco | ADB:5555, JointSPACE:1926(HTTPS) | voir `ambisync_config/config.yml` |
+| Bridge Hue | 192.168.1.59 | Livebox (routé) | 80, DTLS:2100 | voir `ambisync_config/config.yml` |
+| Govee H618A | 192.168.68.55 | Mesh Deco | UDP:4003 | LAN API |
+| Tour GPU (HA) | 192.168.68.50 | Mesh Deco | HA:8123, MQTT:1883, OpenRGB:6742 | voir `.env` |
+| Firestick HD cuisine | 192.168.1.13 (à vérifier post-mesh) | ? | ADB:5555 | — |
+| Firestick 4K sœur | ? | ? | ? | — |
+| Livebox W7 | 192.168.1.1 | Livebox | 80/443 | voir admin Livebox |
+| Mesh Deco (gateway) | 192.168.68.1 | Mesh Deco | — | voir app Deco |
 
 ---
 
@@ -171,10 +193,11 @@ infra-home/
 │   ├── ambilight_to_openrgb.py                   # ancien sync OpenRGB seul (remplacé par unified)
 │   ├── debloat_firetv.sh                         # debloat ADB Amazon
 │   ├── firetv_sideload.sh                        # batch install APKs
+│   ├── shutdown_lights.sh                        # extinction Govee+Hue à l'arrêt PC
 │   ├── Dockerfile.ambisync                       # image Docker sync (plus utilisé)
 │   └── .env.jointspace                           # credentials TV (chmod 600)
 ├── ambisync_config/
-│   └── config.yml                                # config sync : IPs, tokens, mapping, poll_hz
+│   └── config.yml                                # config sync : IPs, tokens, mapping, poll_hz, govee
 ├── pihole/
 │   ├── custom-blocklist.txt                      # ~45 domaines Amazon/Philips/Google
 │   └── etc-pihole/                               # data Pi-hole (auto-généré)
@@ -182,7 +205,7 @@ infra-home/
 │   └── mosquitto.conf                            # broker MQTT local
 ├── ha_config/
 │   ├── configuration.yaml                        # config HA + shell_commands ADB
-│   ├── automations.yaml                          # 5 automations (TV ON/OFF, mode nuit)
+│   ├── automations.yaml                          # 13 automations (TV ON/OFF, mode nuit, télécommande Hue)
 │   ├── custom_components/                        # HACS : custom_ambilight, philips_ambilight_hue
 │   └── .storage/                                 # HA internal (auth, registries, etc.)
 └── docs/apks/
@@ -213,36 +236,35 @@ infra-home/
 
 ## Prochaines étapes
 
-### Priorité 1 — Mesh WiFi (COMMANDÉ)
-- [x] Mesh commandé (modèle à confirmer — Deco BE63 ou XE75 Pro)
-- [ ] **À la réception** : nœud salon (Ethernet Livebox) + nœud chambre + nœud cuisine
-- [ ] Désactiver WiFi Livebox via API
-- [ ] Brancher bridge Hue en Ethernet sur nœud chambre
-- [ ] Configurer Pi-hole comme DNS sur le mesh (si le mesh le permet, sinon par device)
+### Priorité 1 — Mesh WiFi ✅ INSTALLÉ
+- [x] Mesh TP-Link Deco installé et configuré (sous-réseau 192.168.68.x)
+- [x] IPs mises à jour dans config sync
+- [ ] Désactiver WiFi Livebox (optionnel, évite les devices qui s'y connectent par erreur)
+- [ ] Brancher bridge Hue en Ethernet sur nœud Deco chambre (améliorerait DTLS, bridge actuellement sur Livebox routé)
 
 ### Priorité 2 — Écosystème lumière chambre
-- [ ] Acheter **Govee WiFi LED strip TV** (~25-35€) — IMPORTANT : prendre version **WiFi** pas Bluetooth ! [Ce modèle](https://www.amazon.fr/Govee-Lumineuse-R%C3%A9tro%C3%A9clairage-Bluetooth-Fonctionne/dp/B0C3VF8ZP3) ou chercher "Govee WiFi LED strip" avec mention Alexa
-- [ ] Acheter **2x lampe boule verre E27** (~25€) — IKEA FADO 15€/pièce ou équivalent Amazon
+- [x] Govee H618A installé et synchro (moyenne globale écran)
+- [ ] Acheter **2x IKEA FADO E27** (~15€/pièce) — support E14 Amazon renvoyé (fiche trompeuse)
+- [ ] Brancher les 2 ampoules Hue dans les FADO
 - [ ] Intégrer Govee dans HA via HACS (intégration Govee)
-- [ ] Placer lampes de chaque côté TV, strip sous/derrière TV
-- [ ] Brancher 2ème ampoule Hue dans la 2ème lampe boule
 
 ### Priorité 3 — Firestick 4K sœur
 - [ ] Obtenir accord sœur
-- [ ] Dev mode + ADB + debloat + Projectivy + DNS Pi-hole (même procédure que HD)
+- [ ] Dev mode + ADB + debloat + Projectivy (même procédure que HD)
+- [ ] Vérifier IP post-mesh
 
 ### Priorité 4 — Finitions HA
 - [ ] Supprimer intégration HACS `philips_ambilight_hue` (ne marche pas)
-- [ ] Dashboard Lovelace : cartes TV + Hue + Ambilight + Firesticks
-- [ ] Mapper boutons télécommande Hue dimmer switch (4 boutons → actions custom)
-- [ ] Automations avancées quand Zigbee stable : scènes "film", "coucher", réveil progressif
+- [ ] Dashboard Lovelace : cartes TV + Hue + Ambilight + Govee + Firesticks
+- [x] Mapper boutons télécommande Hue dimmer switch (4 boutons × 2 actions = 8 automations)
+- [ ] Scènes soirée unifiées (couleur statique Hue+Govee+OpenRGB, pause sync)
 
 ### Futur
 - [ ] Jellyfin server sur tour GPU → Firesticks/TV consomment le média perso
-- [ ] RPi en bridge DNS transparent (bypass verrouillage DNS Livebox pour tout le réseau)
-- [ ] Hue Entertainment API (DTLS UDP streaming, latence <50ms vs REST 200ms actuel)
-- [ ] Tester sync OpenRGB par zones séparées (quand mesh = latence basse)
-- [ ] Acheter 2ème support E27 pour lampe 2
+- [ ] RPi Zero 2 W pour HA H24 (indépendant du PC)
+- [ ] Capture HDMI pour accès direct pixels écran (HyperHDR) — si besoin de zones séparées Govee RGBIC
+- [ ] Tester sync OpenRGB par zones séparées
+- [ ] Fixer IPs en DHCP statique sur le mesh Deco (éviter changements post-reboot)
 
 ---
 

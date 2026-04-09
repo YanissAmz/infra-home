@@ -133,12 +133,22 @@
     target:
       entity_id: light.hue_smart_plug_1
 - id: tv_off_lights_off
-  alias: TV OFF → Hue + Govee + Plug OFF
+  alias: TV OFF → Hue + Govee + Plug OFF (filet 2h)
+  # ⚠️ media_player.bedroom_tv est une entité Google Cast non fiable :
+  # quand la TV est allumée mais sans session Cast active (Stremio, HDMI,
+  # Projectivy, etc.), l'entité oscille en boucle entre 'off' et 'unavailable'
+  # toutes les 1-3 min. Avec for:30s ça déclenchait des extinctions à tort.
+  # Le vrai TV-off est détecté par le python sync via JointSPACE fail
+  # (cf hue_off_all dans ambilight_unified_sync.py branche TV-off).
+  # Cette automation HA reste comme filet de sécurité longue durée :
+  # 2h de bedroom_tv off = TV vraiment pas utilisée depuis 2h, OK pour off.
+  # TODO refactor demain : remplacer trigger par un command_line binary_sensor
+  # qui check JointSPACE /powerstate (source fiable On/Standby).
   trigger:
   - platform: state
     entity_id: media_player.bedroom_tv
     to: 'off'
-    for: 00:00:30
+    for: 02:00:00
   action:
   - service: light.turn_off
     target:

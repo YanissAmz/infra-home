@@ -9,8 +9,8 @@ HUE_BRIDGE=$(grep 'bridge_host:' "$CONFIG" | awk '{print $2}')
 HUE_TOKEN=$(grep 'token:' "$CONFIG" | awk '{print $2}')
 GOVEE_IP=$(grep 'ip:' "$CONFIG" | head -1 | awk '{print $2}')
 
-# Éteindre Hue lampes 1 et 2
-for lid in 1 2; do
+# Éteindre Hue lampes 1, 2 + prise smart plug 3
+for lid in 1 2 3; do
     curl -sf -X PUT "http://${HUE_BRIDGE}/api/${HUE_TOKEN}/lights/${lid}/state" \
         -d '{"on":false}' --max-time 2 &
 done

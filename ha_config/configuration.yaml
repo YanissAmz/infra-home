@@ -2,6 +2,13 @@
 # Loads default set of integrations. Do not remove.
 default_config:
 
+# Toggle pour forcer le mode jour (override night mode du sync python)
+# Le sync lit /config/.force_day toutes les 5s (cf is_night() dans ambilight_unified_sync.py)
+input_boolean:
+  force_day_mode:
+    name: Mode jour force (override 22h-6h)
+    icon: mdi:weather-sunny
+
 # Load frontend themes from the themes folder
 frontend:
   themes: !include_dir_merge_named themes
@@ -53,6 +60,9 @@ shell_command:
   # Govee LED strip control via LAN API (UDP)
   govee_off: "echo '{\"msg\":{\"cmd\":\"turn\",\"data\":{\"value\":0}}}' | socat - UDP-SENDTO:192.168.68.59:4003"
   govee_on: "echo '{\"msg\":{\"cmd\":\"turn\",\"data\":{\"value\":1}}}' | socat - UDP-SENDTO:192.168.68.59:4003"
+  # Force day mode override — touche/supprime un flag fichier que le sync python lit dans is_night()
+  force_day_on: "touch /config/.force_day"
+  force_day_off: "rm -f /config/.force_day"
   # Firestick apps via ADB
   firestick_hd_stremio: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.stremio.one/.MainActivity"
   firestick_hd_youtube: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.amazon.firetv.youtube/.StartActivity"
@@ -90,6 +100,13 @@ command_line:
   - binary_sensor:
       name: Livebox Online
       command: "cat /config/status/livebox.txt"
+      payload_on: "ON"
+      payload_off: "OFF"
+      scan_interval: 30
+      device_class: connectivity
+  - binary_sensor:
+      name: Tour GPU Online
+      command: "ping -c 1 -W 2 192.168.68.55 >/dev/null 2>&1 && echo ON || echo OFF"
       payload_on: "ON"
       payload_off: "OFF"
       scan_interval: 30

@@ -205,6 +205,9 @@ views:
               - entity: sensor.openrgb_server_status
                 name: OpenRGB Server
                 icon: mdi:led-strip-variant
+              - entity: input_boolean.force_day_mode
+                name: Mode jour force (override 22h-6h)
+                icon: mdi:weather-sunny
           - type: horizontal-stack
             cards:
               - type: button
@@ -265,8 +268,11 @@ views:
           - type: entities
             entities:
               - entity: binary_sensor.tv_philips_online
-                name: TV Philips (192.168.1.26)
+                name: TV Philips (192.168.68.52)
                 icon: mdi:television
+              - entity: binary_sensor.tour_gpu_online
+                name: Tour GPU (192.168.68.55)
+                icon: mdi:desktop-tower
               - entity: binary_sensor.firestick_hd_online
                 name: Firestick HD (192.168.1.13)
                 icon: mdi:fire

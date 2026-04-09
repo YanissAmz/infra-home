@@ -1,6 +1,73 @@
 # Suivi projet — Home automation Philips + Firesticks + Hue + OpenRGB
 
-Fichier de reprise. Dernière mise à jour : 2026-04-08 soir.
+Fichier de reprise. Dernière mise à jour : 2026-04-09 soir.
+
+---
+
+## Session 2026-04-09 soir — Incident icp + cascade de fixes
+
+### Incident
+Désinstallation hâtive de `org.droidtv.icp` (cru "vieux HBBTV", en fait fournit le ContentProvider `nettvregistration.StateProvider` auquel `xtvsystem` bind au boot) → boot loop kernel watchdog reset. Rollback `cmd package install-existing org.droidtv.icp` a remis la TV en marche, mais a laissé un side effect invisible.
+
+### Root cause cachée (2h de diag)
+Pendant le boot loop, `org.droidtv.xtv` (le package qui héberge le serveur JointSPACE via `xtvService`, dans `/system_ext/priv-app/xtv`, PAS `org.droidtv.ipcontrol` comme on aurait pu croire) a été marqué `stopped=true` par Android (policy crash-rate). Un package en `stopped=true` ne reçoit plus aucun broadcast — y compris `BOOT_COMPLETED` — donc `xtvBootReceiver` ne firait plus jamais → ports JointSPACE 1925/1926 dead à chaque boot suivant.
+
+Mauvaises pistes parcourues : "menu Network Remote Control désactivé" (faux), "ipcontrol cassé" (faux), reboot TV (n'a rien fait, le flag stopped survit aux reboots).
+
+### Fix permanent
+```bash
+adb -s 192.168.68.52:5555 shell am startservice \
+    -n org.droidtv.xtv/.xtvService \
+    -a org.droidtv.tv.os.intent.action.ACTION_EACCESSIBILITY
+```
+Cet `am startservice` (variante legacy, **pas** `am start-foreground-service` qui crashe en `ForegroundServiceDidNotStartInTimeException` à 30s exactement sur Android 14) clear le flag `stopped=true` ET démarre le service sans contrat foreground. Une fois `stopped=false` persisté sur disque, Android respawn xtv automatiquement après ses crashes ponctuels.
+
+**Validé en condition réelle** : reboot test 23:25 → JointSPACE 1926 OPEN à T+66s sans intervention ADB. **L'ADB n'est plus nécessaire en runtime**, juste comme outil de diag.
+
+### Pièges à éviter sur xtv (PAS toucher)
+- ❌ `am force-stop org.droidtv.xtv` → re-marque `stopped=true` immédiatement
+- ❌ `am start-foreground-service` sur xtv → crash 30s timeout Android 14 → risque re-stopped après N crashes
+- ❌ `pm clear org.droidtv.xtv` → wipe `/data/data/org.droidtv.xtv/b.bks` (probablement keystore JointSPACE) → besoin de re-pair
+
+### Améliorations annexes appliquées dans la même session
+1. **`docker-compose.yml`** : retrait du service `ambisync` zombie (référençait `philips_hue_ambisync.py`, archi migrée vers systemd host depuis longtemps)
+2. **`hue-shutdown.service`** : disable + remove (chemin pointait vers `/home/yaniss/infra-home/scripts/shutdown_hue.sh` = legacy dir supprimé. Redondant avec `ambilight-sync.service` ExecStopPost de toute façon)
+3. **Couverture Hue smart plug ID 3** (jamais ciblée avant) :
+   - `shutdown_lights.sh` : `for lid in 1 2 3`
+   - `automations.yaml` `tv_off_lights_off` : `+ light.hue_smart_plug_1`
+   - Nouvelle fonction `hue_off_all(bridge_host, token, light_ids=(1,2,3))` dans `ambilight_unified_sync.py`, appelée dans la branche TV-off du loop principal (filet de sécurité si HA loupe la transition `media_player`)
+4. **Toggle "force day mode" depuis HA** :
+   - `input_boolean.force_day_mode` dans `configuration.yaml`
+   - `shell_command.force_day_on/off` qui touch/rm `/config/.force_day` (bind mount HA → host à `ha_config/.force_day`)
+   - Patch `is_night()` : check `FORCE_DAY_FLAG.exists()` en priorité, cache TTL 60s → 5s pour réactivité
+   - Carte ajoutée dans `ui-lovelace.yaml` view "Services" → "Ambilight Sync"
+5. **Détection crash hard de la Tour GPU** (l'`ExecStopPost` ne fire pas en cas de panic kernel ou coupure courant) :
+   - `command_line` binary_sensor `Tour GPU Online` qui ping `192.168.68.55` toutes les 30s (le `ping` integration platform binary_sensor est déprécié sur HA récent)
+   - Automation `tour_offline_lights_off` : trigger sur 60s offline, action = même extinction que `tv_off_lights_off`
+   - Carte ajoutée dans view "Reseau" → "Appareils"
+6. **Couverture plug dans le côté ON** (préparation pour brancher Govee + multiprise sur la prise Hue afin de couper les LEDs parasites de standby la nuit) :
+   - `tv_on_hue_on` : ajout `light.hue_smart_plug_1` ON
+   - `tv_on_after_22h` : ajout plug ON (TV s'allume tard → Govee doit s'alimenter)
+   - `scene_cinema/gaming/lecture` : plug ON (tu mates / joues → Govee on)
+   - `scene_nuit/scene_off` : plug OFF (mode dodo → exactement le but)
+   - Les automations time-based (`night_mode_ambilight` 22h, `morning_mode_ambilight` 6h) **ne touchent PAS la prise** (elles ajustent l'ambiance, pas l'état TV → la prise doit suivre la TV pas l'horloge)
+7. **Cleanup résidus debug** : 9× `test_dtls*.py` + `DTLS_DEBUG_BRIEFING.md` supprimés (le DTLS Hue Entertainment fonctionne nominalement maintenant, validé par log `[hue-ent] DTLS handshake OK, cipher=TLS-PSK-WITH-AES-128-GCM-SHA256` au start systemd)
+
+### Stack d'extinction lumières (4 niveaux maintenant)
+| Niveau | Trigger | Couvre |
+|---|---|---|
+| `ambilight-sync.service` `ExecStopPost` → `shutdown_lights.sh` | systemctl stop / shutdown PC propre | Govee + Hue 1 + Hue 2 + Hue plug 3 |
+| HA automation `tv_off_lights_off` | `media_player.bedroom_tv` → off pendant 30s | Hue 1 + Hue 2 + Hue plug 3 + Govee shell_command |
+| HA automation `tour_offline_lights_off` | `binary_sensor.tour_gpu_online` off pendant 60s (ping fail) | Hue 1 + Hue 2 + Hue plug 3 + Govee shell_command (filet crash hard) |
+| Script python `hue_off_all()` dans branche TV-off | 3 fails consécutifs sur `fetch_ambilight()` | Hue 1 + Hue 2 + Hue plug 3 (filet si HA loupe la transition media_player) |
+
+### TODO post-session (toi)
+- [ ] **Réservation DHCP statique Govee 192.168.68.59** sur app Deco (devient critique vu que la prise va cycler tous les jours TV on/off → reboot Govee → nouveau lease)
+- [x] Désactiver Wireless Debugging TV (fait pendant la session)
+- [ ] **Audit sécurité du repo** avant de le passer en public : grep tous secrets/tokens/IPs perso/MAC, vérifier que rien ne fuit dans l'historique git
+- [ ] HACS `custom_ambilight` : errors en boucle dans HA logs. À investiguer (probablement pas lié à xtv, semble être un échec de connexion préexistant)
+
+---
 
 ---
 
@@ -119,7 +186,7 @@ Fichier de reprise. Dernière mise à jour : 2026-04-08 soir.
 
 - [x] **Shutdown script** (`shutdown_lights.sh`) : éteint Govee + Hue quand le PC s'arrête (ExecStopPost)
 - [x] **Mesh WiFi installé** : TP-Link Deco, sous-réseau 192.168.68.x
-- [x] IPs mises à jour post-mesh : TV=192.168.68.52, Govee=192.168.68.55, Bridge Hue=192.168.1.59 (Livebox, routé)
+- [x] IPs mises à jour post-mesh : TV=192.168.68.52, Govee=192.168.68.59 (DHCP, à fixer sur Deco), Bridge Hue=192.168.1.59 (Livebox, routé)
 - [x] Bridge Hue firmware mis à jour via app iPhone
 - [x] Hue brightness max (254) dans sync mapping + automations HA
 
@@ -167,10 +234,10 @@ Fichier de reprise. Dernière mise à jour : 2026-04-08 soir.
 
 | Device | IP | Sous-réseau | Port | Auth |
 |---|---|---|---|---|
-| TV Philips 55OLED708 | 192.168.68.52 | Mesh Deco | ADB:5555, JointSPACE:1926(HTTPS) | voir `ambisync_config/config.yml` |
+| TV Philips 55OLED708 | 192.168.68.52 | Mesh Deco | ADB:5555 (désactivé en runtime), JointSPACE:1926(HTTPS) | voir `ambisync_config/config.yml` |
 | Bridge Hue | 192.168.1.59 | Livebox (routé) | 80, DTLS:2100 | voir `ambisync_config/config.yml` |
-| Govee H618A | 192.168.68.55 | Mesh Deco | UDP:4003 | LAN API |
-| Tour GPU (HA) | 192.168.68.50 | Mesh Deco | HA:8123, MQTT:1883, OpenRGB:6742 | voir `.env` |
+| Govee H618A | 192.168.68.59 (DHCP, à fixer) | Mesh Deco | UDP:4003 | LAN API |
+| Tour GPU (HA) | 192.168.68.55 (eth) / .57 (wifi) | Mesh Deco | HA:8123, OpenRGB:6742 | voir `.env` |
 | Firestick HD cuisine | 192.168.1.13 (à vérifier post-mesh) | ? | ADB:5555 | — |
 | Firestick 4K sœur | ? | ? | ? | — |
 | Livebox W7 | 192.168.1.1 | Livebox | 80/443 | voir admin Livebox |

@@ -59,13 +59,22 @@ HUESTREAM_HEADER = b"HueStream"
 _night_cache: bool = False
 _night_cache_ts: float = 0.0
 
+# Override "force day mode" piloté depuis HA via input_boolean.force_day_mode
+# (cf shell_command force_day_on/off dans configuration.yaml). Le shell_command HA
+# touche/supprime ce fichier dans le bind mount /config (HA Docker) qui est
+# /home/yaniss/projects/infra-home/ha_config/ côté host. Cache 5s pour réactivité.
+FORCE_DAY_FLAG = Path("/home/yaniss/projects/infra-home/ha_config/.force_day")
+
 
 def is_night() -> bool:
     global _night_cache, _night_cache_ts
     now = time.monotonic()
-    if now - _night_cache_ts > 60.0:
-        h = datetime.now().hour
-        _night_cache = h >= NIGHT_START or h < NIGHT_END
+    if now - _night_cache_ts > 5.0:
+        if FORCE_DAY_FLAG.exists():
+            _night_cache = False
+        else:
+            h = datetime.now().hour
+            _night_cache = h >= NIGHT_START or h < NIGHT_END
         _night_cache_ts = now
     return _night_cache
 
@@ -104,6 +113,23 @@ def rgb_to_xy(r: int, g: int, b: int) -> tuple[float, float]:
 
 
 API_MAX = 160  # plafond observé de l'API Ambilight (valeurs brutes)
+
+
+def hue_off_all(bridge_host: str, token: str, light_ids=(1, 2, 3)) -> None:
+    """Force-off via REST des lights Hue (1, 2 = lampes E27, 3 = smart plug).
+    Utilisé en filet de sécurité quand TV détectée off, en complément de la
+    branche extinction systemd ExecStopPost (qui ne fire que sur shutdown PC)
+    et de l'automation HA tv_off_lights_off (qui peut louper si media_player
+    state ne passe pas par 'off' nominal)."""
+    for lid in light_ids:
+        try:
+            requests.put(
+                f"http://{bridge_host}/api/{token}/lights/{lid}/state",
+                json={"on": False},
+                timeout=1.0,
+            )
+        except Exception:
+            pass
 
 
 def boost_color(r: int, g: int, b: int) -> tuple[int, int, int]:
@@ -727,9 +753,12 @@ def run():
                 if not idle_color_set:
                     if govee:
                         govee.turn_off()
+                    # Filet de sécurité : éteindre Hue lampes + plug via REST
+                    # (Entertainment DTLS n'a pas d'opcode "off", juste des couleurs)
+                    hue_off_all(hue_cfg["bridge_host"], hue_cfg["token"])
                     # PC LEDs : ne pas toucher — laisser OpenRGB/user contrôler
                     idle_color_set = True
-                    print("[unified-sync] TV off → Govee off, PC LEDs untouched")
+                    print("[unified-sync] TV off → Govee + Hue off, PC LEDs untouched")
                 if use_entertainment and hue_ent:
                     hue_ent.keepalive()
                 time.sleep(2.0)

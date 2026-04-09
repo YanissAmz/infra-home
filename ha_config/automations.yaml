@@ -129,8 +129,11 @@
       entity_id: light.hue_color_lamp_1
     data:
       brightness: 20
+  - service: light.turn_on
+    target:
+      entity_id: light.hue_smart_plug_1
 - id: tv_off_lights_off
-  alias: TV OFF → Hue + Govee OFF
+  alias: TV OFF → Hue + Govee + Plug OFF
   trigger:
   - platform: state
     entity_id: media_player.bedroom_tv
@@ -142,9 +145,10 @@
       entity_id:
       - light.hue_color_lamp_1
       - light.hue_color_lamp_2
+      - light.hue_smart_plug_1
   - service: shell_command.govee_off
 - id: tv_on_hue_on
-  alias: TV ON → Hue ON
+  alias: TV ON → Hue ON (lamps + plug Govee)
   trigger:
   - platform: state
     entity_id: media_player.bedroom_tv
@@ -164,6 +168,48 @@
     data:
       brightness: 254
       color_temp_kelvin: 2857
+  - service: light.turn_on
+    target:
+      entity_id: light.hue_smart_plug_1
+
+# ─── FORCE DAY MODE OVERRIDE ───
+- id: force_day_mode_on
+  alias: Mode jour force ON
+  trigger:
+  - platform: state
+    entity_id: input_boolean.force_day_mode
+    to: 'on'
+  action:
+  - service: shell_command.force_day_on
+
+- id: force_day_mode_off
+  alias: Mode jour force OFF
+  trigger:
+  - platform: state
+    entity_id: input_boolean.force_day_mode
+    to: 'off'
+  action:
+  - service: shell_command.force_day_off
+
+# ─── CRASH HARD TOUR ───
+# Si la Tour GPU disparait du reseau >60s (panic kernel, panne hardware,
+# coupure courant), l'ExecStopPost de ambilight-sync ne fire pas. Ce filet
+# de securite eteint Govee + Hue + plug independamment.
+- id: tour_offline_lights_off
+  alias: Tour GPU offline → Lumieres OFF
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.tour_gpu_online
+    to: 'off'
+    for: 00:01:00
+  action:
+  - service: light.turn_off
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+      - light.hue_smart_plug_1
+  - service: shell_command.govee_off
 
 # ─── TELECOMMANDE HUE ───
 

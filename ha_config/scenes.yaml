@@ -10,6 +10,8 @@
       state: "on"
       brightness: 30
       color_temp: 500
+    light.hue_smart_plug_1:
+      state: "on"
 
 - id: scene_gaming
   name: Gaming
@@ -23,6 +25,8 @@
       state: "on"
       brightness: 180
       rgb_color: [255, 0, 100]
+    light.hue_smart_plug_1:
+      state: "on"
 
 - id: scene_lecture
   name: Lecture
@@ -36,6 +40,8 @@
       state: "on"
       brightness: 255
       color_temp: 300
+    light.hue_smart_plug_1:
+      state: "on"
 
 - id: scene_nuit
   name: Nuit
@@ -49,6 +55,8 @@
       state: "on"
       brightness: 15
       color_temp: 454
+    light.hue_smart_plug_1:
+      state: "off"
 
 - id: scene_off
   name: Tout eteindre
@@ -57,6 +65,8 @@
     light.hue_color_lamp_1:
       state: "off"
     light.hue_color_lamp_2:
+      state: "off"
+    light.hue_smart_plug_1:
       state: "off"
     light.philips_ambilight_ambilight:
       state: "off"

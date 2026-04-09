@@ -54,16 +54,8 @@ services:
   #     - ./mosquitto_data:/mosquitto/data
   #     - ./mosquitto_log:/mosquitto/log
 
-  ambisync:
-    container_name: ambisync
-    build:
-      context: .
-      dockerfile: scripts/Dockerfile.ambisync
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ./scripts:/app/scripts:ro
-      - ./ambisync_config:/app/ambisync_config:ro
-    command: ["python", "/app/scripts/philips_hue_ambisync.py"]
-    environment:
-      - PYTHONUNBUFFERED=1
+  # --- ambisync container retiré 2026-04-09 ---
+  # Architecture migrée vers systemd host: /etc/systemd/system/ambilight-sync.service
+  # qui exécute scripts/ambilight_unified_sync.py (Govee + Hue Entertainment DTLS + OpenRGB).
+  # Ne PAS recréer ce service Docker — il dupliquerait le poll JointSPACE TV
+  # et entrerait en conflit avec le DTLS Hue Entertainment (1 client max sur le bridge).

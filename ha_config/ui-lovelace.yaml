@@ -229,18 +229,18 @@ views:
                   action: call-service
                   service: shell_command.ambisync_start
 
-      # Pi-hole
-      - type: vertical-stack
-        title: Pi-hole DNS
-        cards:
-          - type: entities
-            entities:
-              - entity: sensor.pi_hole_blocked_today
-                name: Requetes bloquees
-                icon: mdi:shield-check
-          - type: markdown
-            content: |
-              **Admin Pi-hole** : [http://localhost:8081/admin](http://localhost:8081/admin)
+      # Pi-hole carte désactivée 2026-04-09 (container supprimé, NextDNS gère l'ad-blocking)
+      # - type: vertical-stack
+      #   title: Pi-hole DNS
+      #   cards:
+      #     - type: entities
+      #       entities:
+      #         - entity: sensor.pi_hole_blocked_today
+      #           name: Requetes bloquees
+      #           icon: mdi:shield-check
+      #     - type: markdown
+      #       content: |
+      #         **Admin Pi-hole** : [http://localhost:8081/admin](http://localhost:8081/admin)
 
       # Docker stack
       - type: markdown
@@ -249,8 +249,6 @@ views:
           | Service | Port | Role |
           |---------|------|------|
           | **Home Assistant** | 8123 | Orchestrateur |
-          | **Pi-hole** | 8081 | DNS adblock |
-          | **Mosquitto** | 1883 | MQTT broker |
           | **OpenRGB** | 6742 | LED sync |
           | **Ambilight Sync** | — | TV→Hue+LEDs |
 

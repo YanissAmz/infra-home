@@ -68,10 +68,11 @@ command_line:
       name: OpenRGB Server Status
       command: "cat /config/status/openrgb.txt"
       scan_interval: 30
-  - sensor:
-      name: Pi-hole Blocked Today
-      command: "cat /config/status/pihole.txt"
-      scan_interval: 60
+  # Pi-hole sensor désactivé 2026-04-09 (container Pi-hole supprimé, NextDNS gère l'ad-blocking)
+  # - sensor:
+  #     name: Pi-hole Blocked Today
+  #     command: "cat /config/status/pihole.txt"
+  #     scan_interval: 60
   - binary_sensor:
       name: TV Philips Online
       command: "cat /config/status/tv.txt"

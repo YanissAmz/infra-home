@@ -362,7 +362,7 @@ Supprimés : qwq-32b-32k (12 tok/s, remplacé par gemma4:26b), qwen2.5:0.5b, gem
 ## Références
 
 - Plan complet : `/home/yaniss/.claude/plans/sequential-forging-flamingo.md`
-- Runbook : `/home/yaniss/infra-home/README.md`
+- Runbook : `/home/yaniss/projects/infra-home/README.md`
 - Mémoire projet : `/home/yaniss/.claude/projects/-home-yaniss/memory/project_home_automation.md`
 - Doc réseau/Livebox API : `/home/yaniss/docs/reseaux-config.md`
 - XDA System User exploit : https://xdaforums.com/t/system-user-fire-cube-stick-tv-tablet-ps7704-fireos7-rs8149-fireos8.4759215/

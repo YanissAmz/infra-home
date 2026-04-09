@@ -2,7 +2,7 @@
 # Extinction Govee + Hue quand le PC s'éteint.
 # Appelé par ambilight-sync.service ExecStopPost.
 
-CONFIG="/home/yaniss/infra-home/ambisync_config/config.yml"
+CONFIG="/home/yaniss/projects/infra-home/ambisync_config/config.yml"
 
 # Lire les valeurs du config YAML (grep simple, pas besoin de yq)
 HUE_BRIDGE=$(grep 'bridge_host:' "$CONFIG" | awk '{print $2}')

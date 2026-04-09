@@ -27,6 +27,9 @@ pihole/etc-dnsmasq.d/
 __pycache__/
 *.pyc
 
+# Local debug/test scripts (Hue DTLS troubleshooting, etc.)
+scripts/test_dtls*.py
+
 # APKs (too large)
 docs/apks/cache/
 

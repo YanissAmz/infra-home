@@ -130,7 +130,7 @@
     data:
       brightness: 20
 - id: tv_off_lights_off
-  alias: TV OFF → Hue OFF
+  alias: TV OFF → Hue + Govee OFF
   trigger:
   - platform: state
     entity_id: media_player.bedroom_tv
@@ -142,6 +142,7 @@
       entity_id:
       - light.hue_color_lamp_1
       - light.hue_color_lamp_2
+  - service: shell_command.govee_off
 - id: tv_on_hue_on
   alias: TV ON → Hue ON
   trigger:

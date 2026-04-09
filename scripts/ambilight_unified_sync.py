@@ -34,16 +34,20 @@ CONFIG_PATH = Path(__file__).parent.parent / "ambisync_config" / "config.yml"
 # Night mode: 22h-6h → reduced brightness
 NIGHT_START = 22
 NIGHT_END = 6
-NIGHT_HUE_BRI = 20
-NIGHT_LED_SCALE = 0.05  # 5% brightness for OpenRGB LEDs at night
+NIGHT_HUE_BRI = 76  # ~30% max brightness for Hue at night
+NIGHT_GOVEE_BRI = 30  # 30% hardware brightness for Govee at night
+NIGHT_LED_SCALE = 0.30  # 30% brightness for OpenRGB at night
 
 # Couleur par défaut quand TV éteinte (bleu doux)
 IDLE_COLOR = (0, 40, 255)
 
 # Delta filter — seuil pour éviter micro-tremblements
-DELTA_THRESHOLD_ORGB = 15
-DELTA_THRESHOLD_HUE = 15
-DELTA_THRESHOLD_GOVEE = 15
+DELTA_THRESHOLD_DAY = 15
+DELTA_THRESHOLD_NIGHT = 40  # plus strict la nuit, évite les micro-variations
+
+
+def _delta_threshold() -> int:
+    return DELTA_THRESHOLD_NIGHT if is_night() else DELTA_THRESHOLD_DAY
 
 # Govee LAN API
 GOVEE_LAN_PORT = 4003
@@ -104,7 +108,8 @@ API_MAX = 160  # plafond observé de l'API Ambilight (valeurs brutes)
 
 def boost_color(r: int, g: int, b: int) -> tuple[int, int, int]:
     """Boost fidèle à l'Ambilight : couleurs renforcées + luminosité proportionnelle.
-    Scène sombre → LEDs sombres. Scène lumineuse → LEDs lumineuses."""
+    Scène sombre → LEDs sombres. Scène lumineuse → LEDs lumineuses.
+    Utilisé pour Hue + OpenRGB (préserve la dynamique)."""
     mx = max(r, g, b)
     if mx < 3:
         return 1, 1, 1  # minimum dim plutôt qu'éteint
@@ -126,6 +131,53 @@ def boost_color(r: int, g: int, b: int) -> tuple[int, int, int]:
     g2 = min(255, max(0, int(g2 * brightness)))
     b2 = min(255, max(0, int(b2 * brightness)))
     return r2, g2, b2
+
+
+def boost_color_vif(r: int, g: int, b: int) -> tuple[int, int, int]:
+    """Mode 'vif' : couleurs à pleine intensité avec boost saturation modéré.
+    À utiliser avec un pixel déjà saturé (pas une moyenne) pour éviter
+    que le boost transforme du gris-neutre en cyan/jaune pur.
+    Utilisé pour Govee. Le hardware brightness Govee gère le dimming jour/nuit."""
+    mx = max(r, g, b)
+    if mx < 3:
+        return 1, 1, 1  # minimum dim plutôt qu'éteint
+    # Normaliser les proportions à 255 (saturation max possible)
+    scale = 255.0 / mx
+    r2 = r * scale
+    g2 = g * scale
+    b2 = b * scale
+    # Boost saturation modéré (×1.4) — éclatant sans distordre la teinte
+    avg = (r2 + g2 + b2) / 3
+    sat_boost = 1.4
+    r2 = avg + (r2 - avg) * sat_boost
+    g2 = avg + (g2 - avg) * sat_boost
+    b2 = avg + (b2 - avg) * sat_boost
+    # Pas d'atténuation par luminosité scène — strip toujours à pleine puissance RGB
+    r2 = min(255, max(0, int(r2)))
+    g2 = min(255, max(0, int(g2)))
+    b2 = min(255, max(0, int(b2)))
+    return r2, g2, b2
+
+
+def pick_dominant_saturated(layer: dict) -> tuple[int, int, int]:
+    """Sélectionne le pixel le plus saturé parmi toutes les zones Ambilight.
+    Saturation = max(r,g,b) - min(r,g,b) — capture la couleur la plus marquante
+    de la frame actuelle, au lieu d'une moyenne diluée vers le gris.
+    Filtre les pixels très sombres (mx<10) pour éviter le bruit."""
+    best = None
+    best_sat = -1
+    for side_name in ("left", "right", "top"):
+        zone = layer.get(side_name, {})
+        for px in zone.values():
+            r, g, b = px["r"], px["g"], px["b"]
+            mx = max(r, g, b)
+            if mx < 10:
+                continue
+            sat = mx - min(r, g, b)
+            if sat > best_sat:
+                best_sat = sat
+                best = (r, g, b)
+    return best or (0, 0, 0)
 
 
 class TVConnection:
@@ -298,15 +350,15 @@ class HueEntertainmentSink:
 
             # Delta filter
             prev = self.last.get(lid, (0, 0, 0))
-            if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < DELTA_THRESHOLD_HUE:
+            if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < _delta_threshold():
                 continue
             self.last[lid] = (r, g, b)
 
-            # Night mode / brightness scaling
+            # Brightness scaling
             if is_night():
                 scale = NIGHT_HUE_BRI / 255.0
             else:
-                scale = m.get("brightness", 200) / 254.0
+                scale = m.get("brightness", 254) / 254.0
             r = int(r * scale)
             g = int(g * scale)
             b = int(b * scale)
@@ -367,7 +419,7 @@ class HueSink:
 
             # Delta filter
             prev = self.last.get(lid, (0, 0, 0))
-            if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < DELTA_THRESHOLD_HUE:
+            if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < _delta_threshold():
                 continue
             self.last[lid] = (r, g, b)
 
@@ -384,7 +436,7 @@ class HueSink:
                 continue
 
             x, y = rgb_to_xy(r, g, b)
-            max_bri = NIGHT_HUE_BRI if is_night() else m.get("brightness", 200)
+            max_bri = NIGHT_HUE_BRI if is_night() else m.get("brightness", 254)
             # Brightness proportionnelle à la luminosité de la couleur boostée
             scene_bri = max(r, g, b) * max_bri // 255
             bri = min(254, max(1, scene_bri))
@@ -406,25 +458,35 @@ class GoveeSink:
         self.brightness = brightness
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.last = (0, 0, 0)
+        self._night_state = None  # track night/day transitions
+        self._last_bri_ts = 0.0  # refresh brightness every 5 min
+
+    def _set_brightness(self, value: int):
+        msg = json.dumps({'msg': {'cmd': 'brightness', 'data': {'value': value}}})
+        try:
+            self._sock.sendto(msg.encode(), (self.ip, GOVEE_LAN_PORT))
+        except Exception:
+            pass
 
     def push(self, colors: dict[str, tuple[int, int, int]]):
         r, g, b = next(iter(colors.values()))
 
         # Delta filter
         prev = self.last
-        if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < DELTA_THRESHOLD_GOVEE:
+        if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < _delta_threshold():
             return
         self.last = (r, g, b)
 
-        # Brightness scaling + night mode
-        if is_night():
-            scale = NIGHT_LED_SCALE
-        else:
-            scale = self.brightness / 100.0
-        r = int(r * scale)
-        g = int(g * scale)
-        b = int(b * scale)
+        # Night mode : luminosité hardware (préserve saturation des couleurs)
+        # Refresh périodique toutes les 5 min pour contrer l'app Govee Home
+        night = is_night()
+        now = time.monotonic()
+        if night != self._night_state or (now - self._last_bri_ts) > 300:
+            self._set_brightness(NIGHT_GOVEE_BRI if night else 100)
+            self._night_state = night
+            self._last_bri_ts = now
 
+        # Envoyer les couleurs pleines (la luminosité est gérée par le hardware)
         msg = json.dumps({'msg': {'cmd': 'colorwc', 'data': {
             'color': {'r': r, 'g': g, 'b': b}, 'colorTemInKelvin': 0,
         }}})
@@ -440,6 +502,13 @@ class GoveeSink:
         try:
             self._sock.sendto(msg.encode(), (self.ip, GOVEE_LAN_PORT))
             self.last = (r, g, b)
+        except Exception:
+            pass
+
+    def turn_off(self):
+        msg = json.dumps({'msg': {'cmd': 'turn', 'data': {'value': 0}}})
+        try:
+            self._sock.sendto(msg.encode(), (self.ip, GOVEE_LAN_PORT))
         except Exception:
             pass
 
@@ -534,7 +603,7 @@ class OpenRGBSink:
 
         # Delta check
         prev = self.last.get("dom", (0, 0, 0))
-        if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < DELTA_THRESHOLD_ORGB:
+        if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < _delta_threshold():
             return
         self.last["dom"] = (r, g, b)
 
@@ -657,11 +726,10 @@ def run():
                 # TV off
                 if not idle_color_set:
                     if govee:
-                        govee.set_static(*IDLE_COLOR)
-                    if orgb_ok:
-                        orgb.set_static(*IDLE_COLOR)
+                        govee.turn_off()
+                    # PC LEDs : ne pas toucher — laisser OpenRGB/user contrôler
                     idle_color_set = True
-                    print("[unified-sync] TV off → idle blue")
+                    print("[unified-sync] TV off → Govee off, PC LEDs untouched")
                 if use_entertainment and hue_ent:
                     hue_ent.keepalive()
                 time.sleep(2.0)
@@ -670,6 +738,8 @@ def run():
             continue
 
         if tv_fail_count >= 3 and idle_color_set:
+            if govee:
+                govee.turn_on()
             print("[unified-sync] TV back on")
         tv_fail_count = 0
         tv._backoff = 0.3
@@ -697,19 +767,12 @@ def run():
 
         dominant = boost_color(avg_r, avg_g, avg_b)
 
-        # Govee : moyenne globale de TOUTES les zones (left+right+top)
-        # pour un halo ambiant cohérent avec l'Ambilight natif
-        all_pixels = []
-        for side_name in ("left", "right", "top"):
-            zone = layer.get(side_name, {})
-            for px in zone.values():
-                all_pixels.append((px["r"], px["g"], px["b"]))
-        if all_pixels:
-            n = len(all_pixels)
-            gr = sum(p[0] for p in all_pixels) // n
-            gg = sum(p[1] for p in all_pixels) // n
-            gb = sum(p[2] for p in all_pixels) // n
-            govee_color = boost_color(gr, gg, gb)
+        # Govee : pixel le plus saturé du frame (mode vif fidèle au contenu)
+        # Capture la couleur dominante visuellement marquante au lieu de diluer
+        # 13 pixels en une moyenne grisâtre qui force le boost à inventer du cyan.
+        gr, gg, gb = pick_dominant_saturated(layer)
+        if max(gr, gg, gb) >= 3:
+            govee_color = boost_color_vif(gr, gg, gb)
         else:
             govee_color = dominant
 

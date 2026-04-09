@@ -37,17 +37,22 @@ services:
   #     - NET_ADMIN
   #     - SYS_NICE
 
-  mosquitto:
-    container_name: mosquitto
-    image: eclipse-mosquitto:2
-    restart: unless-stopped
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto_config:/mosquitto/config
-      - ./mosquitto_data:/mosquitto/data
-      - ./mosquitto_log:/mosquitto/log
+  # --- Mosquitto désactivé 2026-04-09 ---
+  # Raison: aucune intégration `mqtt:` active dans HA (configuration.yaml, automations.yaml, scripts.yaml)
+  # Stack maison tout en HTTP/UDP/SDK direct (JointSPACE TV, Govee LAN, Hue Entertainment, OpenRGB SDK, ADB Firesticks)
+  # Réactiver: décommenter le bloc + ajouter `mqtt:` dans configuration.yaml
+  #
+  # mosquitto:
+  #   container_name: mosquitto
+  #   image: eclipse-mosquitto:2
+  #   restart: unless-stopped
+  #   ports:
+  #     - "1883:1883"
+  #     - "9001:9001"
+  #   volumes:
+  #     - ./mosquitto_config:/mosquitto/config
+  #     - ./mosquitto_data:/mosquitto/data
+  #     - ./mosquitto_log:/mosquitto/log
 
   ambisync:
     container_name: ambisync

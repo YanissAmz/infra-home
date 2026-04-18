@@ -35,9 +35,9 @@ views:
                 name: Prise Zigbee (relay mesh)
                 icon: mdi:power-plug
 
-      # Scenes
+      # Scenes + modes
       - type: vertical-stack
-        title: Ambiances
+        title: Ambiances et modes
         cards:
           - type: horizontal-stack
             cards:
@@ -71,14 +71,26 @@ views:
           - type: horizontal-stack
             cards:
               - type: button
-                name: Nuit
+                name: Mode nuit
                 icon: mdi:weather-night
                 icon_height: 40px
                 tap_action:
                   action: call-service
-                  service: scene.turn_on
-                  target:
-                    entity_id: scene.nuit
+                  service: script.mode_nuit_now
+              - type: button
+                name: Mode jour
+                icon: mdi:brightness-7
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: script.mode_jour_now
+              - type: button
+                name: Mode auto
+                icon: mdi:home-clock
+                icon_height: 40px
+                tap_action:
+                  action: call-service
+                  service: script.mode_auto_now
               - type: button
                 name: Tout OFF
                 icon: mdi:power-sleep
@@ -88,19 +100,6 @@ views:
                   service: scene.turn_on
                   target:
                     entity_id: scene.tout_eteindre
-              - type: button
-                name: Brightness -
-                icon: mdi:brightness-4
-                icon_height: 40px
-                tap_action:
-                  action: call-service
-                  service: light.turn_on
-                  target:
-                    entity_id:
-                    - light.hue_color_lamp_1
-                    - light.hue_color_lamp_2
-                  data:
-                    brightness_step: -50
 
       # Telecommande
       - type: vertical-stack
@@ -126,7 +125,7 @@ views:
 
       # Automations
       - type: entities
-        title: Automations
+        title: Regles auto (enable/disable)
         show_header_toggle: false
         entities:
           - entity: automation.tv_on_ambilight_vivid
@@ -135,6 +134,9 @@ views:
           - entity: automation.22h_ambilight_doux
             name: 22h → Mode nuit
             icon: mdi:weather-night
+          - entity: automation.6h_ambilight_jour
+            name: 6h → Mode jour
+            icon: mdi:white-balance-sunny
           - entity: automation.tv_on_apres_22h_ambilight_doux
             name: TV ON → Doux (nuit)
             icon: mdi:moon-waning-crescent
@@ -202,12 +204,27 @@ views:
               - entity: sensor.ambilight_sync_status
                 name: Sync TV → Hue + LEDs
                 icon: mdi:sync
+              - entity: sensor.ambilight_mode
+                name: Mode courant
+                icon: mdi:tune-variant
+              - entity: sensor.ambilight_transport
+                name: Transport Hue
+                icon: mdi:lightning-bolt
+              - entity: sensor.govee_target_brightness
+                name: Cible Govee
+                icon: mdi:led-strip-variant
+              - entity: sensor.hue_target_brightness
+                name: Cible Hue
+                icon: mdi:lightbulb-multiple
               - entity: sensor.openrgb_server_status
                 name: OpenRGB Server
                 icon: mdi:led-strip-variant
               - entity: input_boolean.force_day_mode
                 name: Mode jour force (override 22h-6h)
                 icon: mdi:weather-sunny
+              - entity: input_boolean.force_night_mode
+                name: Mode nuit force
+                icon: mdi:weather-night
           - type: horizontal-stack
             cards:
               - type: button

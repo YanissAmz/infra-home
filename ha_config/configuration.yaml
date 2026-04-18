@@ -8,6 +8,9 @@ input_boolean:
   force_day_mode:
     name: Mode jour force (override 22h-6h)
     icon: mdi:weather-sunny
+  force_night_mode:
+    name: Mode nuit force
+    icon: mdi:weather-night
 
 # Load frontend themes from the themes folder
 frontend:
@@ -21,52 +24,26 @@ shell_command:
   ambisync_stop: "echo ambisync_stop > /config/commands/sync_$(date +%s).cmd"
   ambisync_start: "echo ambisync_start > /config/commands/sync_$(date +%s).cmd"
   # Ambilight style via JointSPACE API (fallback when custom_ambilight fails)
-  ambilight_natural: >-
-    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
-    -X POST 'https://192.168.68.52:1926/6/ambilight/currentconfiguration'
-    -H 'Content-Type: application/json'
-    -d '{"styleName":"FOLLOW_VIDEO","isExpert":false,"menuSetting":"NATURAL"}'
-  ambilight_vivid: >-
-    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
-    -X POST 'https://192.168.68.52:1926/6/ambilight/currentconfiguration'
-    -H 'Content-Type: application/json'
-    -d '{"styleName":"FOLLOW_VIDEO","isExpert":false,"menuSetting":"VIVID"}'
-  ambilight_power_on: >-
-    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
-    -X POST 'https://192.168.68.52:1926/6/ambilight/power'
-    -H 'Content-Type: application/json'
-    -d '{"power":"On"}'
-  ambilight_brightness_low: >-
-    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
-    -X POST 'https://192.168.68.52:1926/6/menuitems/settings/update'
-    -H 'Content-Type: application/json'
-    -d '{"values":[{"value":{"Nodeid":2130968780,"Controllable":true,"Available":true,"data":{"value":3}}}]}'
-  ambilight_brightness_high: >-
-    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
-    -X POST 'https://192.168.68.52:1926/6/menuitems/settings/update'
-    -H 'Content-Type: application/json'
-    -d '{"values":[{"value":{"Nodeid":2130968780,"Controllable":true,"Available":true,"data":{"value":8}}}]}'
+  ambilight_natural: !secret shell_ambilight_natural
+  ambilight_vivid: !secret shell_ambilight_vivid
+  ambilight_power_on: !secret shell_ambilight_power_on
+  ambilight_brightness_low: !secret shell_ambilight_brightness_low
+  ambilight_brightness_high: !secret shell_ambilight_brightness_high
   # Picture style: 0=Personnalisé, 4=Filmmaker (à confirmer)
-  tv_picture_personal: >-
-    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
-    -X POST 'https://192.168.68.52:1926/6/menuitems/settings/update'
-    -H 'Content-Type: application/json'
-    -d '{"values":[{"value":{"Nodeid":2130968797,"Controllable":true,"Available":true,"data":{"selected_item":0}}}]}'
-  tv_picture_filmmaker: >-
-    curl -sk --digest -u 'ambisync_yaniss01:6be351f9c5ca1919516df5be99c269cf9f5b334c7b4824f924b8ddb9698c5714'
-    -X POST 'https://192.168.68.52:1926/6/menuitems/settings/update'
-    -H 'Content-Type: application/json'
-    -d '{"values":[{"value":{"Nodeid":2130968797,"Controllable":true,"Available":true,"data":{"selected_item":4}}}]}'
+  tv_picture_personal: !secret shell_tv_picture_personal
+  tv_picture_filmmaker: !secret shell_tv_picture_filmmaker
   # Govee LED strip control via LAN API (UDP)
-  govee_off: "echo '{\"msg\":{\"cmd\":\"turn\",\"data\":{\"value\":0}}}' | socat - UDP-SENDTO:192.168.68.59:4003"
-  govee_on: "echo '{\"msg\":{\"cmd\":\"turn\",\"data\":{\"value\":1}}}' | socat - UDP-SENDTO:192.168.68.59:4003"
+  govee_off: !secret shell_govee_off
+  govee_on: !secret shell_govee_on
   # Force day mode override — touche/supprime un flag fichier que le sync python lit dans is_night()
   force_day_on: "touch /config/.force_day"
   force_day_off: "rm -f /config/.force_day"
+  force_night_on: "touch /config/.force_night"
+  force_night_off: "rm -f /config/.force_night"
   # Firestick apps via ADB
-  firestick_hd_stremio: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.stremio.one/.MainActivity"
-  firestick_hd_youtube: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.amazon.firetv.youtube/.StartActivity"
-  firestick_hd_iptv: "adb connect 192.168.1.13:5555 && adb -s 192.168.1.13:5555 shell am start -n com.lizardroid.tivimate/.ui.ActivitySplash"
+  firestick_hd_stremio: !secret shell_firestick_hd_stremio
+  firestick_hd_youtube: !secret shell_firestick_hd_youtube
+  firestick_hd_iptv: !secret shell_firestick_hd_iptv
 
 # Command-line sensors — read status files updated by cron on host
 command_line:
@@ -78,6 +55,28 @@ command_line:
       name: OpenRGB Server Status
       command: "cat /config/status/openrgb.txt"
       scan_interval: 30
+  - sensor:
+      name: Ambilight Mode
+      command: "cat /config/status/ambilight_mode.txt 2>/dev/null || echo booting"
+      scan_interval: 15
+  - sensor:
+      name: Ambilight Transport
+      command: "cat /config/status/ambilight_transport.txt 2>/dev/null || echo starting"
+      scan_interval: 15
+  - sensor:
+      name: Govee Target Brightness
+      command: "cat /config/status/govee_target_brightness.txt 2>/dev/null || echo 0"
+      unit_of_measurement: "%"
+      scan_interval: 15
+  - sensor:
+      name: Hue Target Brightness
+      command: "cat /config/status/hue_target_brightness.txt 2>/dev/null || echo 0"
+      unit_of_measurement: "%"
+      scan_interval: 15
+  - sensor:
+      name: Ambilight Color
+      command: "cat /config/status/ambilight_color.txt 2>/dev/null || echo 0,0,0"
+      scan_interval: 15
   # Pi-hole sensor désactivé 2026-04-09 (container Pi-hole supprimé, NextDNS gère l'ad-blocking)
   # - sensor:
   #     name: Pi-hole Blocked Today
@@ -90,31 +89,39 @@ command_line:
       payload_off: "OFF"
       scan_interval: 30
       device_class: connectivity
+  # Source fiable TV on/off : JointSPACE /powerstate (On/Standby).
+  # Remplace media_player.bedroom_tv (Cast entity — oscille off/unavailable
+  # quand TV allumée sans session Cast active) comme trigger TV on/off.
+  - binary_sensor:
+      name: TV Philips Power
+      command: !secret binary_sensor_tv_philips_power_command
+      payload_on: "ON"
+      payload_off: "OFF"
+      scan_interval: 15
+      device_class: power
   - binary_sensor:
       name: Firestick HD Online
-      command: "cat /config/status/firestick.txt"
+      command: !secret binary_sensor_firestick_hd_online_command
       payload_on: "ON"
       payload_off: "OFF"
       scan_interval: 30
       device_class: connectivity
   - binary_sensor:
       name: Livebox Online
-      command: "cat /config/status/livebox.txt"
+      command: !secret binary_sensor_livebox_online_command
       payload_on: "ON"
       payload_off: "OFF"
       scan_interval: 30
       device_class: connectivity
   - binary_sensor:
       name: Tour GPU Online
-      command: "ping -c 1 -W 2 192.168.68.55 >/dev/null 2>&1 && echo ON || echo OFF"
+      command: !secret binary_sensor_gpu_tower_online_command
       payload_on: "ON"
       payload_off: "OFF"
       scan_interval: 30
       device_class: connectivity
 
 lovelace:
-  mode: yaml
-  resources: []
   dashboards:
     lovelace-home:
       mode: yaml

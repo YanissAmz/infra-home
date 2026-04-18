@@ -6,12 +6,35 @@ tv:
 hue:
   bridge_host: "192.168.1.XX"
   token: "your_hue_api_token"
-  mapping:
-    - zone: left
-      light_id: 1
-    - zone: right
-      light_id: 2
-  poll_hz: 3
-  transition_ds: 2
+  client_key: "optional_entertainment_client_key"
+  entertainment_group_id: "optional_group_id"
 
+govee:
+  ip: "192.168.1.XX"
+  brightness: 100
+
+poll_hz: 3
+transition_ds: 2
 openrgb_poll_hz: 0
+
+mapping:
+  - side: left
+    light_id: 1
+    brightness: 254
+  - side: right
+    light_id: 2
+    brightness: 254
+
+runtime:
+  night:
+    start_hour: 22
+    end_hour: 6
+    hue_brightness: 76
+    govee_brightness: 1
+    led_scale: 0.30
+  delta_threshold:
+    day: 15
+    night: 40
+  status:
+    dir: "/home/yaniss/projects/infra-home/ha_config/status"
+    refresh_interval_s: 5

@@ -1,0 +1,159 @@
+apply_mode_jour:
+  alias: Appliquer mode jour
+  mode: restart
+  sequence:
+  - service: shell_command.ambilight_power_on
+    continue_on_error: true
+  - delay: '00:00:02'
+  - service: light.turn_on
+    target:
+      entity_id: light.philips_ambilight_ambilight
+    data:
+      effect: Vivid
+      brightness: 255
+    continue_on_error: true
+  - service: shell_command.ambilight_vivid
+    continue_on_error: true
+  - delay: '00:00:02'
+  - service: shell_command.ambilight_brightness_high
+    continue_on_error: true
+  - service: light.turn_on
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+    data:
+      brightness: 254
+      color_temp_kelvin: 2857
+    continue_on_error: true
+
+apply_mode_nuit:
+  alias: Appliquer mode nuit
+  mode: restart
+  sequence:
+  - service: shell_command.ambilight_power_on
+    continue_on_error: true
+  - delay: '00:00:02'
+  - service: light.turn_on
+    target:
+      entity_id: light.philips_ambilight_ambilight
+    data:
+      effect: Natural
+      brightness: 100
+    continue_on_error: true
+  - service: shell_command.ambilight_natural
+    continue_on_error: true
+  - delay: '00:00:02'
+  - service: shell_command.ambilight_brightness_low
+    continue_on_error: true
+  - service: light.turn_on
+    target:
+      entity_id:
+      - light.hue_color_lamp_1
+      - light.hue_color_lamp_2
+    data:
+      brightness: 20
+      color_temp: 454
+    continue_on_error: true
+
+mode_jour_now:
+  alias: Mode jour maintenant
+  mode: restart
+  sequence:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.force_night_mode
+  - service: shell_command.force_night_off
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.force_day_mode
+  - service: shell_command.force_day_on
+  - service: script.apply_mode_jour
+    continue_on_error: true
+
+mode_nuit_now:
+  alias: Mode nuit maintenant
+  mode: restart
+  sequence:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.force_day_mode
+  - service: shell_command.force_day_off
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.force_night_mode
+  - service: shell_command.force_night_on
+  - service: script.apply_mode_nuit
+    continue_on_error: true
+
+mode_auto_jour_now:
+  alias: Mode auto jour maintenant
+  mode: restart
+  sequence:
+  - service: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.force_day_mode
+      - input_boolean.force_night_mode
+  - service: shell_command.force_day_off
+  - service: shell_command.force_night_off
+  - service: script.apply_mode_jour
+    continue_on_error: true
+
+mode_auto_nuit_now:
+  alias: Mode auto nuit maintenant
+  mode: restart
+  sequence:
+  - service: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.force_day_mode
+      - input_boolean.force_night_mode
+  - service: shell_command.force_day_off
+  - service: shell_command.force_night_off
+  - service: script.apply_mode_nuit
+    continue_on_error: true
+
+sync_ambilight_mode_now:
+  alias: Synchroniser mode ambilight maintenant
+  mode: restart
+  sequence:
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: input_boolean.force_night_mode
+        state: 'on'
+      sequence:
+      - service: script.apply_mode_nuit
+        continue_on_error: true
+    - conditions:
+      - condition: state
+        entity_id: input_boolean.force_day_mode
+        state: 'on'
+      sequence:
+      - service: script.apply_mode_jour
+        continue_on_error: true
+    - conditions:
+      - condition: time
+        after: '22:00:00'
+        before: '06:00:00'
+      sequence:
+      - service: script.apply_mode_nuit
+        continue_on_error: true
+    default:
+    - service: script.apply_mode_jour
+      continue_on_error: true
+
+mode_auto_now:
+  alias: Mode auto maintenant
+  mode: restart
+  sequence:
+  - service: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.force_day_mode
+      - input_boolean.force_night_mode
+  - service: shell_command.force_day_off
+  - service: shell_command.force_night_off
+  - service: script.sync_ambilight_mode_now
+    continue_on_error: true

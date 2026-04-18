@@ -116,6 +116,7 @@ cd infra-home
 # Secrets
 cp .env.example .env                              # Pi-hole password
 cp ambisync_config/config.example.yml ambisync_config/config.yml  # TV + Hue credentials
+cp ha_config/secrets.example.yaml ha_config/secrets.yaml          # HA shell commands / local hosts
 # Edit both files with your values
 ```
 
@@ -156,6 +157,9 @@ docker compose up -d
 python scripts/ambilight_unified_sync.py
 
 # Then install as systemd service (see docs)
+# Daily workflow:
+make check
+make deploy-ambilight
 ```
 
 **Access:**

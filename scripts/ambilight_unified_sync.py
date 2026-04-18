@@ -12,6 +12,7 @@ sinon fallback REST API.
 
 from __future__ import annotations
 
+import copy
 import json
 import signal
 import socket
@@ -29,21 +30,51 @@ from requests.auth import HTTPDigestAuth
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-CONFIG_PATH = Path(__file__).parent.parent / "ambisync_config" / "config.yml"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = REPO_ROOT / "ambisync_config" / "config.yml"
+DEFAULT_STATUS_DIR = REPO_ROOT / "ha_config" / "status"
 
-# Night mode: 22h-6h → reduced brightness
-NIGHT_START = 22
-NIGHT_END = 6
-NIGHT_HUE_BRI = 76  # ~30% max brightness for Hue at night
-NIGHT_GOVEE_BRI = 30  # 30% hardware brightness for Govee at night
-NIGHT_LED_SCALE = 0.30  # 30% brightness for OpenRGB at night
+DEFAULT_CONFIG: dict = {
+    "poll_hz": 3,
+    "transition_ds": 2,
+    "openrgb_poll_hz": 0,
+    "mapping": [],
+    "runtime": {
+        "night": {
+            "start_hour": 22,
+            "end_hour": 6,
+            "hue_brightness": 76,
+            "govee_brightness": 1,
+            "led_scale": 0.30,
+        },
+        "delta_threshold": {
+            "day": 15,
+            "night": 40,
+        },
+        "status": {
+            "dir": str(DEFAULT_STATUS_DIR),
+            "refresh_interval_s": 5,
+        },
+    },
+}
+
+# Runtime config — can be overridden by ambisync_config/config.yml
+NIGHT_START = DEFAULT_CONFIG["runtime"]["night"]["start_hour"]
+NIGHT_END = DEFAULT_CONFIG["runtime"]["night"]["end_hour"]
+NIGHT_HUE_BRI = DEFAULT_CONFIG["runtime"]["night"]["hue_brightness"]
+NIGHT_GOVEE_BRI = DEFAULT_CONFIG["runtime"]["night"]["govee_brightness"]
+NIGHT_LED_SCALE = DEFAULT_CONFIG["runtime"]["night"]["led_scale"]
 
 # Couleur par défaut quand TV éteinte (bleu doux)
 IDLE_COLOR = (0, 40, 255)
 
 # Delta filter — seuil pour éviter micro-tremblements
-DELTA_THRESHOLD_DAY = 15
-DELTA_THRESHOLD_NIGHT = 40  # plus strict la nuit, évite les micro-variations
+DELTA_THRESHOLD_DAY = DEFAULT_CONFIG["runtime"]["delta_threshold"]["day"]
+DELTA_THRESHOLD_NIGHT = DEFAULT_CONFIG["runtime"]["delta_threshold"]["night"]
+STATUS_DIR = Path(DEFAULT_CONFIG["runtime"]["status"]["dir"])
+STATUS_REFRESH_INTERVAL_S = float(
+    DEFAULT_CONFIG["runtime"]["status"]["refresh_interval_s"]
+)
 
 
 def _delta_threshold() -> int:
@@ -59,22 +90,68 @@ HUESTREAM_HEADER = b"HueStream"
 _night_cache: bool = False
 _night_cache_ts: float = 0.0
 
-# Override "force day mode" piloté depuis HA via input_boolean.force_day_mode
-# (cf shell_command force_day_on/off dans configuration.yaml). Le shell_command HA
-# touche/supprime ce fichier dans le bind mount /config (HA Docker) qui est
-# /home/yaniss/projects/infra-home/ha_config/ côté host. Cache 5s pour réactivité.
-FORCE_DAY_FLAG = Path("/home/yaniss/projects/infra-home/ha_config/.force_day")
+# Override "force day/night mode" piloté depuis HA via input_booleans dédiés.
+FORCE_DAY_FLAG = REPO_ROOT / "ha_config" / ".force_day"
+FORCE_NIGHT_FLAG = REPO_ROOT / "ha_config" / ".force_night"
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    result = copy.deepcopy(base)
+    for key, value in (override or {}).items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def _apply_runtime_config(cfg: dict) -> None:
+    global NIGHT_START, NIGHT_END, NIGHT_HUE_BRI, NIGHT_GOVEE_BRI, NIGHT_LED_SCALE
+    global DELTA_THRESHOLD_DAY, DELTA_THRESHOLD_NIGHT, STATUS_DIR
+    global STATUS_REFRESH_INTERVAL_S
+
+    runtime = cfg.get("runtime") or {}
+    night_cfg = runtime.get("night") or {}
+    delta_cfg = runtime.get("delta_threshold") or {}
+    status_cfg = runtime.get("status") or {}
+
+    NIGHT_START = int(night_cfg.get("start_hour", NIGHT_START))
+    NIGHT_END = int(night_cfg.get("end_hour", NIGHT_END))
+    NIGHT_HUE_BRI = int(night_cfg.get("hue_brightness", NIGHT_HUE_BRI))
+    NIGHT_GOVEE_BRI = int(night_cfg.get("govee_brightness", NIGHT_GOVEE_BRI))
+    NIGHT_LED_SCALE = float(night_cfg.get("led_scale", NIGHT_LED_SCALE))
+
+    DELTA_THRESHOLD_DAY = int(delta_cfg.get("day", DELTA_THRESHOLD_DAY))
+    DELTA_THRESHOLD_NIGHT = int(delta_cfg.get("night", DELTA_THRESHOLD_NIGHT))
+
+    status_dir = status_cfg.get("dir")
+    STATUS_DIR = Path(status_dir) if status_dir else DEFAULT_STATUS_DIR
+    STATUS_REFRESH_INTERVAL_S = float(
+        status_cfg.get("refresh_interval_s", STATUS_REFRESH_INTERVAL_S)
+    )
+
+
+def scheduled_is_night(at: datetime | None = None) -> bool:
+    current = at or datetime.now()
+    hour = current.hour
+    return hour >= NIGHT_START or hour < NIGHT_END
+
+
+def resolve_mode(tv_online: bool = True) -> str:
+    if not tv_online:
+        return "tv_off"
+    if FORCE_NIGHT_FLAG.exists():
+        return "force_night"
+    if FORCE_DAY_FLAG.exists():
+        return "force_day"
+    return "auto_night" if scheduled_is_night() else "auto_day"
 
 
 def is_night() -> bool:
     global _night_cache, _night_cache_ts
     now = time.monotonic()
     if now - _night_cache_ts > 5.0:
-        if FORCE_DAY_FLAG.exists():
-            _night_cache = False
-        else:
-            h = datetime.now().hour
-            _night_cache = h >= NIGHT_START or h < NIGHT_END
+        _night_cache = resolve_mode(tv_online=True) in {"force_night", "auto_night"}
         _night_cache_ts = now
     return _night_cache
 
@@ -95,7 +172,46 @@ except ImportError:
 
 
 def load_config() -> dict:
-    return yaml.safe_load(CONFIG_PATH.read_text())
+    raw_cfg = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+    cfg = _deep_merge(DEFAULT_CONFIG, raw_cfg)
+
+    # Backward compatibility with older config.example.yml layout.
+    hue_cfg = cfg.get("hue") or {}
+    if not raw_cfg.get("mapping") and hue_cfg.get("mapping"):
+        cfg["mapping"] = hue_cfg["mapping"]
+    if "transition_ds" not in raw_cfg and hue_cfg.get("transition_ds") is not None:
+        cfg["transition_ds"] = hue_cfg["transition_ds"]
+    if "poll_hz" not in raw_cfg and hue_cfg.get("poll_hz") is not None:
+        cfg["poll_hz"] = hue_cfg["poll_hz"]
+
+    _apply_runtime_config(cfg)
+    return cfg
+
+
+class StatusWriter:
+    def __init__(self, directory: Path):
+        self.directory = directory
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self._last_values: dict[str, str] = {}
+        self._last_write_ts: dict[str, float] = {}
+
+    def write(self, name: str, value: str | int | float, *, force: bool = False) -> None:
+        text = f"{value}\n"
+        now = time.monotonic()
+        last_text = self._last_values.get(name)
+        last_ts = self._last_write_ts.get(name, 0.0)
+        if (
+            not force
+            and last_text == text
+            and (now - last_ts) < STATUS_REFRESH_INTERVAL_S
+        ):
+            return
+        try:
+            (self.directory / f"{name}.txt").write_text(text)
+            self._last_values[name] = text
+            self._last_write_ts[name] = now
+        except Exception:
+            pass
 
 
 def rgb_to_xy(r: int, g: int, b: int) -> tuple[float, float]:
@@ -331,7 +447,7 @@ class HueEntertainmentSink:
             )
             ctx = ClientContext(conf)
             udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            udp_sock.settimeout(5.0)
+            udp_sock.settimeout(10.0)
             udp_sock.connect((self.bridge, ENTERTAINMENT_PORT))
             self._dtls_sock = ctx.wrap_socket(udp_sock, server_hostname=None)
             self._dtls_sock.do_handshake()
@@ -487,6 +603,11 @@ class GoveeSink:
         self._night_state = None  # track night/day transitions
         self._last_bri_ts = 0.0  # refresh brightness every 5 min
 
+    def _target_brightness(self, night: bool | None = None) -> int:
+        if night is None:
+            night = is_night()
+        return NIGHT_GOVEE_BRI if night else self.brightness
+
     def _set_brightness(self, value: int):
         msg = json.dumps({'msg': {'cmd': 'brightness', 'data': {'value': value}}})
         try:
@@ -494,23 +615,36 @@ class GoveeSink:
         except Exception:
             pass
 
+    def _sync_brightness(
+        self,
+        *,
+        force: bool = False,
+        night: bool | None = None,
+        now: float | None = None,
+    ):
+        if night is None:
+            night = is_night()
+        if now is None:
+            now = time.monotonic()
+        if not force and night == self._night_state and (now - self._last_bri_ts) <= 300:
+            return
+        self._set_brightness(self._target_brightness(night))
+        self._night_state = night
+        self._last_bri_ts = now
+
     def push(self, colors: dict[str, tuple[int, int, int]]):
         r, g, b = next(iter(colors.values()))
+
+        # Night/day brightness must stay in sync even if the color delta is tiny.
+        night = is_night()
+        now = time.monotonic()
+        self._sync_brightness(night=night, now=now)
 
         # Delta filter
         prev = self.last
         if abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2]) < _delta_threshold():
             return
         self.last = (r, g, b)
-
-        # Night mode : luminosité hardware (préserve saturation des couleurs)
-        # Refresh périodique toutes les 5 min pour contrer l'app Govee Home
-        night = is_night()
-        now = time.monotonic()
-        if night != self._night_state or (now - self._last_bri_ts) > 300:
-            self._set_brightness(NIGHT_GOVEE_BRI if night else 100)
-            self._night_state = night
-            self._last_bri_ts = now
 
         # Envoyer les couleurs pleines (la luminosité est gérée par le hardware)
         msg = json.dumps({'msg': {'cmd': 'colorwc', 'data': {
@@ -544,12 +678,7 @@ class GoveeSink:
             self._sock.sendto(msg.encode(), (self.ip, GOVEE_LAN_PORT))
         except Exception:
             pass
-        # Forcer luminosité hardware à 100%
-        msg = json.dumps({'msg': {'cmd': 'brightness', 'data': {'value': 100}}})
-        try:
-            self._sock.sendto(msg.encode(), (self.ip, GOVEE_LAN_PORT))
-        except Exception:
-            pass
+        self._sync_brightness(force=True)
 
 
 class OpenRGBSink:
@@ -613,9 +742,12 @@ class OpenRGBSink:
         if not self.client:
             return
         color = RGBColor(r, g, b)
-        for i in range(len(self.client.devices)):
+        for dev in self.client.devices:
             try:
-                self.client.devices[i].set_color(color)
+                if dev.type == DeviceType.MOTHERBOARD:
+                    dev.set_colors([color] * len(dev.leds))
+                else:
+                    dev.set_color(color)
             except Exception:
                 self._mark_disconnected()
                 return
@@ -640,14 +772,17 @@ class OpenRGBSink:
 
         color = RGBColor(r, g, b)
 
-        # Carte mère : set_color sur le device entier
+        # Carte mère : set_colors device-level (1 commande HID pour les 79 LEDs)
+        # Note: device.set_color() ne marche pas sur MSI MPG X670E,
+        # mais device.set_colors() avec le tableau complet fonctionne.
         mobo_idx = next(
             (i for i, d in enumerate(self.client.devices) if d.type == DeviceType.MOTHERBOARD),
             None
         )
         if mobo_idx is not None:
             try:
-                self.client.devices[mobo_idx].set_color(color)
+                mobo = self.client.devices[mobo_idx]
+                mobo.set_colors([color] * len(mobo.leds))
             except Exception:
                 self._mark_disconnected()
                 return
@@ -676,6 +811,12 @@ def run():
     cfg = load_config()
     tv_cfg = cfg["tv"]
     hue_cfg = cfg["hue"]
+    status = StatusWriter(STATUS_DIR)
+    status.write("ambilight_mode", "booting", force=True)
+    status.write("ambilight_transport", "starting", force=True)
+    status.write("govee_target_brightness", 0, force=True)
+    status.write("hue_target_brightness", 0, force=True)
+    status.write("ambilight_color", "0,0,0", force=True)
 
     tv = TVConnection(tv_cfg["host"], tv_cfg["device_id"], tv_cfg["auth_key"])
 
@@ -692,11 +833,18 @@ def run():
             hue_cfg["bridge_host"], hue_cfg["token"],
             client_key, str(group_id), cfg["mapping"],
         )
-        if hue_ent.connect():
-            use_entertainment = True
-        else:
-            print("[unified-sync] Entertainment connect failed, falling back to REST")
-            hue_ent = None
+        # Cold-start DTLS handshake is flaky (cross-subnet to bridge).
+        # Retry a few times before falling back to slow REST mode.
+        for attempt in range(1, 5):
+            if hue_ent.connect():
+                use_entertainment = True
+                break
+            print(f"[unified-sync] Entertainment connect failed (try {attempt}/4)")
+            time.sleep(2.0)
+        if not use_entertainment:
+            # Keep hue_ent alive so the main-loop reconnect path can retry
+            # later instead of being stuck on REST until service restart.
+            print("[unified-sync] using REST for now, will keep retrying DTLS")
 
     if not use_entertainment:
         hue_rest = HueSink(
@@ -725,11 +873,36 @@ def run():
     signal.signal(signal.SIGTERM, _sig)
 
     idle_color_set = False
-    ent_reconnect_ts = 0.0
+    # If we already burned the cold-start retries, don't spam reconnect
+    # on the first loop iteration — give the bridge 30s of breathing room.
+    ent_reconnect_ts = time.monotonic() if (hue_ent and not use_entertainment) else 0.0
     tv_fail_count = 0
+    last_mode = None
+    last_transport = None
+
+    def update_runtime_status(*, tv_online: bool, transport: str) -> None:
+        nonlocal last_mode, last_transport
+        mode = resolve_mode(tv_online=tv_online)
+        if mode != last_mode:
+            print(f"[unified-sync] mode -> {mode}")
+            last_mode = mode
+        if transport != last_transport:
+            print(f"[unified-sync] hue transport -> {transport}")
+            last_transport = transport
+
+        hue_day_bri = max((m.get("brightness", 254) for m in cfg["mapping"]), default=254)
+        hue_target_bri = NIGHT_HUE_BRI if is_night() else hue_day_bri
+        status.write("ambilight_mode", mode)
+        status.write("ambilight_transport", transport)
+        status.write("govee_target_brightness", govee._target_brightness() if govee else 0)
+        status.write("hue_target_brightness", round((hue_target_bri / 254) * 100))
 
     mode_label = "Entertainment DTLS" if use_entertainment else "REST"
     print(f"[unified-sync] started — Govee: {'yes' if govee else 'no'}, Hue: ({mode_label}), OpenRGB: {'yes' if orgb_ok else 'no'}")
+    update_runtime_status(
+        tv_online=False,
+        transport="entertainment" if use_entertainment else ("rest" if hue_rest else "none"),
+    )
 
     while not stop:
         t0 = time.monotonic()
@@ -738,16 +911,26 @@ def run():
         if not orgb_ok:
             orgb_ok = orgb.reconnect_if_needed()
 
-        # Entertainment reconnect if disconnected
-        if use_entertainment and hue_ent and not hue_ent._connected:
+        # Entertainment reconnect if disconnected (covers both post-start drops
+        # and cold-start failures where we're currently falling through to REST).
+        if hue_ent and not hue_ent._connected:
             if t0 - ent_reconnect_ts > 30.0:
                 ent_reconnect_ts = t0
-                if not hue_ent.reconnect():
+                if hue_ent.reconnect():
+                    if not use_entertainment:
+                        use_entertainment = True
+                        print("[unified-sync] DTLS recovered → switching from REST to Entertainment")
+                else:
                     print("[hue-ent] reconnect failed, retry in 30s")
 
         data = tv.fetch_ambilight()
         if data is None:
             tv_fail_count += 1
+            transport = (
+                "entertainment"
+                if (use_entertainment and hue_ent and hue_ent._connected)
+                else ("rest" if hue_rest else "none")
+            )
             if tv_fail_count >= 3:
                 # TV off
                 if not idle_color_set:
@@ -759,10 +942,12 @@ def run():
                     # PC LEDs : ne pas toucher — laisser OpenRGB/user contrôler
                     idle_color_set = True
                     print("[unified-sync] TV off → Govee + Hue off, PC LEDs untouched")
+                update_runtime_status(tv_online=False, transport=transport)
                 if use_entertainment and hue_ent:
                     hue_ent.keepalive()
                 time.sleep(2.0)
             else:
+                update_runtime_status(tv_online=True, transport=transport)
                 time.sleep(tv.get_backoff())
             continue
 
@@ -773,6 +958,12 @@ def run():
         tv_fail_count = 0
         tv._backoff = 0.3
         idle_color_set = False
+        transport = (
+            "entertainment"
+            if (use_entertainment and hue_ent and hue_ent._connected)
+            else ("rest" if hue_rest else "none")
+        )
+        update_runtime_status(tv_online=True, transport=transport)
 
         layer = data.get("layer1", {})
 
@@ -795,6 +986,17 @@ def run():
         avg_b = (bl["b"] + br["b"]) // 2
 
         dominant = boost_color(avg_r, avg_g, avg_b)
+
+        # Shared color file — read by HYTE dashboard ambient page (v2) so the
+        # screen, LEDs, and Hue all track the exact same color in real time.
+        try:
+            from pathlib import Path as _P
+            _P("/tmp/ambilight-color").write_text(
+                f"{dominant[0]} {dominant[1]} {dominant[2]}\n"
+            )
+            status.write("ambilight_color", f"{dominant[0]},{dominant[1]},{dominant[2]}")
+        except Exception:
+            pass
 
         # Govee : pixel le plus saturé du frame (mode vif fidèle au contenu)
         # Capture la couleur dominante visuellement marquante au lieu de diluer

@@ -17,14 +17,7 @@ apply_mode_jour:
   - delay: '00:00:02'
   - service: shell_command.ambilight_brightness_high
     continue_on_error: true
-  - service: light.turn_on
-    target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
-    data:
-      brightness: 254
-      color_temp_kelvin: 2857
+  - service: shell_command.hue_mode_day
     continue_on_error: true
 
 apply_mode_nuit:
@@ -46,14 +39,7 @@ apply_mode_nuit:
   - delay: '00:00:02'
   - service: shell_command.ambilight_brightness_low
     continue_on_error: true
-  - service: light.turn_on
-    target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
-    data:
-      brightness: 20
-      color_temp: 454
+  - service: shell_command.hue_mode_night
     continue_on_error: true
 
 mode_jour_now:
@@ -156,4 +142,50 @@ mode_auto_now:
   - service: shell_command.force_day_off
   - service: shell_command.force_night_off
   - service: script.sync_ambilight_mode_now
+    continue_on_error: true
+
+apply_ambilight_runtime_settings:
+  alias: Appliquer reglages runtime ambilight
+  mode: restart
+  sequence:
+  - service: shell_command.ambilight_runtime_write
+    continue_on_error: true
+
+scene_cinema_now:
+  alias: Scene cinema maintenant
+  mode: restart
+  sequence:
+  - service: shell_command.hue_scene_cinema
+    continue_on_error: true
+
+scene_gaming_now:
+  alias: Scene gaming maintenant
+  mode: restart
+  sequence:
+  - service: shell_command.hue_scene_gaming
+    continue_on_error: true
+
+scene_lecture_now:
+  alias: Scene lecture maintenant
+  mode: restart
+  sequence:
+  - service: shell_command.hue_scene_lecture
+    continue_on_error: true
+
+scene_nuit_now:
+  alias: Scene nuit maintenant
+  mode: restart
+  sequence:
+  - service: shell_command.hue_scene_night
+    continue_on_error: true
+
+scene_off_now:
+  alias: Tout eteindre maintenant
+  mode: restart
+  sequence:
+  - service: shell_command.hue_all_off
+    continue_on_error: true
+  - service: shell_command.govee_off
+    continue_on_error: true
+  - service: shell_command.ambilight_power_off
     continue_on_error: true

@@ -15,6 +15,7 @@ ha_config/blueprints/
 ha_config/custom_components/
 ha_config/status/
 ha_config/commands/
+ha_config/runtime/*.json
 
 # Docker data
 mosquitto_data/

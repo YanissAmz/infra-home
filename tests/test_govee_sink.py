@@ -35,6 +35,8 @@ class GoveeSinkTests(unittest.TestCase):
         }
         sync._night_cache = False
         sync._night_cache_ts = 0.0
+        sync._runtime_override_cache = {}
+        sync._runtime_override_cache_ts = 0.0
 
     def tearDown(self):
         sync.NIGHT_START = self._runtime["night_start"]
@@ -48,6 +50,8 @@ class GoveeSinkTests(unittest.TestCase):
         sync.STATUS_REFRESH_INTERVAL_S = self._runtime["status_refresh"]
         sync._night_cache = False
         sync._night_cache_ts = 0.0
+        sync._runtime_override_cache = {}
+        sync._runtime_override_cache_ts = 0.0
 
     def test_push_updates_brightness_even_when_color_delta_is_filtered(self):
         fake_socket = FakeSocket()
@@ -120,6 +124,33 @@ class GoveeSinkTests(unittest.TestCase):
         with patch("pathlib.Path.exists", autospec=True, side_effect=fake_exists):
             self.assertEqual(sync.resolve_mode(tv_online=True), "force_night")
             self.assertTrue(sync.is_night())
+
+    def test_runtime_override_file_updates_night_thresholds(self):
+        overrides = {
+            "night": {
+                "start_hour": 21,
+                "end_hour": 5,
+                "hue_brightness_pct": 20,
+                "govee_brightness_pct": 7,
+                "led_scale_pct": 12,
+            },
+            "delta_threshold": {"day": 8, "night": 33},
+        }
+
+        def fake_read_text(path):
+            if path == sync.RUNTIME_OVERRIDE_PATH:
+                return json.dumps(overrides)
+            raise FileNotFoundError(path)
+
+        with patch("pathlib.Path.read_text", autospec=True, side_effect=fake_read_text):
+            sync._runtime_override_cache_ts = -1.0
+            self.assertEqual(sync.runtime_night_start(), 21)
+            self.assertEqual(sync.runtime_night_end(), 5)
+            self.assertEqual(sync.runtime_night_hue_bri(), 51)
+            self.assertEqual(sync.runtime_night_govee_bri(), 7)
+            self.assertEqual(sync.runtime_night_led_scale(), 0.12)
+            self.assertEqual(sync.runtime_delta_threshold(daytime=True), 8)
+            self.assertEqual(sync.runtime_delta_threshold(daytime=False), 33)
 
 
 if __name__ == "__main__":

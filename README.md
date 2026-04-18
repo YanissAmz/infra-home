@@ -162,6 +162,9 @@ make check
 make deploy-ambilight
 ```
 
+Runtime day/night tuning is exposed directly in Home Assistant under `Services > Ambilight Sync > Reglages runtime`.
+Those helpers write `/config/runtime/overrides.json`, which the sync reloads live without a service restart.
+
 **Access:**
 - Home Assistant: `http://localhost:8123`
 - Pi-hole admin: `http://localhost:8081/admin`

@@ -8,6 +8,9 @@ services:
     image: ghcr.io/home-assistant/home-assistant:stable
     restart: unless-stopped
     network_mode: host         # requis pour mDNS discovery (Hue, Philips TV)
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     volumes:
       - ./ha_config:/config
       - /etc/localtime:/etc/localtime:ro

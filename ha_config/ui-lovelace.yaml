@@ -47,27 +47,21 @@ views:
                 icon_height: 40px
                 tap_action:
                   action: call-service
-                  service: scene.turn_on
-                  target:
-                    entity_id: scene.cinema
+                  service: script.scene_cinema_now
               - type: button
                 name: Gaming
                 icon: mdi:gamepad-variant
                 icon_height: 40px
                 tap_action:
                   action: call-service
-                  service: scene.turn_on
-                  target:
-                    entity_id: scene.gaming
+                  service: script.scene_gaming_now
               - type: button
                 name: Lecture
                 icon: mdi:book-open-variant
                 icon_height: 40px
                 tap_action:
                   action: call-service
-                  service: scene.turn_on
-                  target:
-                    entity_id: scene.lecture
+                  service: script.scene_lecture_now
           - type: horizontal-stack
             cards:
               - type: button
@@ -97,9 +91,7 @@ views:
                 icon_height: 40px
                 tap_action:
                   action: call-service
-                  service: scene.turn_on
-                  target:
-                    entity_id: scene.tout_eteindre
+                  service: script.scene_off_now
 
       # Telecommande
       - type: vertical-stack
@@ -225,6 +217,23 @@ views:
               - entity: input_boolean.force_night_mode
                 name: Mode nuit force
                 icon: mdi:weather-night
+          - type: entities
+            title: Reglages runtime
+            entities:
+              - entity: input_number.ambilight_night_start_hour
+                name: Debut nuit
+              - entity: input_number.ambilight_night_end_hour
+                name: Fin nuit
+              - entity: input_number.ambilight_hue_night_brightness_pct
+                name: Hue nuit
+              - entity: input_number.ambilight_govee_night_brightness_pct
+                name: Govee nuit
+              - entity: input_number.ambilight_led_night_scale_pct
+                name: LEDs PC nuit
+              - entity: input_number.ambilight_delta_threshold_day
+                name: Delta jour
+              - entity: input_number.ambilight_delta_threshold_night
+                name: Delta nuit
           - type: horizontal-stack
             cards:
               - type: button
@@ -323,7 +332,7 @@ views:
         content: |
           | Appareil | IP | Acces |
           |----------|----|-------|
-          | TV Philips 55OLED708 | 192.168.1.26 | JointSPACE + ADB |
+          | TV Philips 55OLED708 | 192.168.68.52 | JointSPACE + ADB |
           | Bridge Hue | DHCP | REST API |
           | Firestick HD | 192.168.1.13 | ADB |
           | Firestick 4K (soeur) | — | ADB |

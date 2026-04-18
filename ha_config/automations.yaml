@@ -16,13 +16,21 @@
   trigger:
   - platform: time
     at: '22:00:00'
+    id: schedule
   - platform: homeassistant
     event: start
+    id: startup
   condition:
   - condition: time
     after: '22:00:00'
     before: '06:00:00'
   action:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: startup
+      sequence:
+      - delay: '00:00:45'
   - service: script.mode_auto_nuit_now
     continue_on_error: true
 - id: morning_mode_ambilight
@@ -30,13 +38,21 @@
   trigger:
   - platform: time
     at: '06:00:00'
+    id: schedule
   - platform: homeassistant
     event: start
+    id: startup
   condition:
   - condition: time
     after: '06:00:00'
     before: '22:00:00'
   action:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: startup
+      sequence:
+      - delay: '00:00:45'
   - service: script.mode_auto_jour_now
     continue_on_error: true
 - id: tv_on_after_22h
@@ -69,12 +85,7 @@
     to: 'off'
     for: 02:00:00
   action:
-  - service: light.turn_off
-    target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
-      - light.hue_smart_plug_1
+  - service: shell_command.hue_all_off
   - service: shell_command.govee_off
 - id: tv_on_hue_on
   alias: TV ON → Hue ON (lamps + plug Govee)
@@ -95,18 +106,7 @@
     entity_id: media_player.bedroom_tv
     to: 'on'
   action:
-  - service: light.turn_on
-    target:
-      entity_id: light.hue_smart_plug_1
-  - delay: '00:00:05'
-  - service: light.turn_on
-    target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
-    data:
-      brightness: 254
-      color_temp_kelvin: 2857
+  - service: shell_command.hue_tv_on
 
 # ─── FORCE DAY MODE OVERRIDE ───
 - id: force_day_mode_on
@@ -151,6 +151,25 @@
   action:
   - service: shell_command.force_night_off
 
+- id: ambilight_runtime_apply_on_change
+  alias: Reglages runtime ambilight → appliquer
+  trigger:
+  - platform: state
+    entity_id:
+    - input_number.ambilight_night_start_hour
+    - input_number.ambilight_night_end_hour
+    - input_number.ambilight_hue_night_brightness_pct
+    - input_number.ambilight_govee_night_brightness_pct
+    - input_number.ambilight_led_night_scale_pct
+    - input_number.ambilight_delta_threshold_day
+    - input_number.ambilight_delta_threshold_night
+  - platform: homeassistant
+    event: start
+  action:
+  - delay: '00:00:10'
+  - service: script.apply_ambilight_runtime_settings
+    continue_on_error: true
+
 # ─── CRASH HARD TOUR ───
 # Si la Tour GPU disparait du reseau >60s (panic kernel, panne hardware,
 # coupure courant), l'ExecStopPost de ambilight-sync ne fire pas. Ce filet
@@ -163,12 +182,7 @@
     to: 'off'
     for: 00:01:00
   action:
-  - service: light.turn_off
-    target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
-      - light.hue_smart_plug_1
+  - service: shell_command.hue_all_off
   - service: shell_command.govee_off
 
 # ─── TELECOMMANDE HUE ───
@@ -182,14 +196,7 @@
     attribute: event_type
     to: short_release
   action:
-  - service: light.turn_on
-    target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
-    data:
-      brightness: 254
-      color_temp_kelvin: 2857
+  - service: shell_command.hue_mode_day
 
 # Bouton 1 - appui long : scene gaming
 - id: remote_btn1_long
@@ -200,9 +207,7 @@
     attribute: event_type
     to: long_press
   action:
-  - service: scene.turn_on
-    target:
-      entity_id: scene.gaming
+  - service: script.scene_gaming_now
 
 # Bouton 2 - appui court : brightness +
 - id: remote_btn2_short
@@ -213,13 +218,7 @@
     attribute: event_type
     to: short_release
   action:
-  - service: light.turn_on
-    target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
-    data:
-      brightness_step: 50
+  - service: shell_command.hue_brightness_up
 
 # Bouton 2 - appui long : scene lecture
 - id: remote_btn2_long
@@ -230,9 +229,7 @@
     attribute: event_type
     to: long_press
   action:
-  - service: scene.turn_on
-    target:
-      entity_id: scene.lecture
+  - service: script.scene_lecture_now
 
 # Bouton 3 - appui court : brightness -
 - id: remote_btn3_short
@@ -243,13 +240,7 @@
     attribute: event_type
     to: short_release
   action:
-  - service: light.turn_on
-    target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
-    data:
-      brightness_step: -50
+  - service: shell_command.hue_brightness_down
 
 # Bouton 3 - appui long : scene cinema
 - id: remote_btn3_long
@@ -260,9 +251,7 @@
     attribute: event_type
     to: long_press
   action:
-  - service: scene.turn_on
-    target:
-      entity_id: scene.cinema
+  - service: script.scene_cinema_now
 
 # Bouton 4 - appui court : tout eteindre
 - id: remote_btn4_short
@@ -273,11 +262,7 @@
     attribute: event_type
     to: short_release
   action:
-  - service: light.turn_off
-    target:
-      entity_id:
-      - light.hue_color_lamp_1
-      - light.hue_color_lamp_2
+  - service: script.scene_off_now
 
 # Bouton 4 - appui long : scene nuit
 - id: remote_btn4_long
@@ -288,6 +273,4 @@
     attribute: event_type
     to: long_press
   action:
-  - service: scene.turn_on
-    target:
-      entity_id: scene.nuit
+  - service: script.scene_nuit_now

@@ -33,6 +33,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "ambisync_config" / "config.yml"
 DEFAULT_STATUS_DIR = REPO_ROOT / "ha_config" / "status"
+RUNTIME_OVERRIDE_PATH = REPO_ROOT / "ha_config" / "runtime" / "overrides.json"
 
 DEFAULT_CONFIG: dict = {
     "poll_hz": 3,
@@ -78,7 +79,7 @@ STATUS_REFRESH_INTERVAL_S = float(
 
 
 def _delta_threshold() -> int:
-    return DELTA_THRESHOLD_NIGHT if is_night() else DELTA_THRESHOLD_DAY
+    return runtime_delta_threshold(daytime=not is_night())
 
 # Govee LAN API
 GOVEE_LAN_PORT = 4003
@@ -89,6 +90,8 @@ HUESTREAM_HEADER = b"HueStream"
 
 _night_cache: bool = False
 _night_cache_ts: float = 0.0
+_runtime_override_cache: dict = {}
+_runtime_override_cache_ts: float = 0.0
 
 # Override "force day/night mode" piloté depuis HA via input_booleans dédiés.
 FORCE_DAY_FLAG = REPO_ROOT / "ha_config" / ".force_day"
@@ -131,10 +134,66 @@ def _apply_runtime_config(cfg: dict) -> None:
     )
 
 
+def _load_runtime_overrides() -> dict:
+    global _runtime_override_cache, _runtime_override_cache_ts
+    now = time.monotonic()
+    if now - _runtime_override_cache_ts <= 5.0:
+        return _runtime_override_cache
+    try:
+        _runtime_override_cache = json.loads(RUNTIME_OVERRIDE_PATH.read_text())
+    except Exception:
+        _runtime_override_cache = {}
+    _runtime_override_cache_ts = now
+    return _runtime_override_cache
+
+
+def _runtime_override(path: tuple[str, ...], default):
+    current = _load_runtime_overrides()
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    return current
+
+
+def runtime_night_start() -> int:
+    return int(_runtime_override(("night", "start_hour"), NIGHT_START))
+
+
+def runtime_night_end() -> int:
+    return int(_runtime_override(("night", "end_hour"), NIGHT_END))
+
+
+def runtime_night_hue_bri() -> int:
+    pct = _runtime_override(("night", "hue_brightness_pct"), None)
+    if pct is None:
+        return NIGHT_HUE_BRI
+    return max(1, min(254, round((int(pct) / 100) * 254)))
+
+
+def runtime_night_govee_bri() -> int:
+    return max(0, min(100, int(_runtime_override(("night", "govee_brightness_pct"), NIGHT_GOVEE_BRI))))
+
+
+def runtime_night_led_scale() -> float:
+    pct = _runtime_override(("night", "led_scale_pct"), None)
+    if pct is None:
+        return NIGHT_LED_SCALE
+    return max(0.0, min(1.0, int(pct) / 100.0))
+
+
+def runtime_delta_threshold(daytime: bool) -> int:
+    path = ("delta_threshold", "day" if daytime else "night")
+    default = DELTA_THRESHOLD_DAY if daytime else DELTA_THRESHOLD_NIGHT
+    return int(_runtime_override(path, default))
+
+
 def scheduled_is_night(at: datetime | None = None) -> bool:
     current = at or datetime.now()
     hour = current.hour
-    return hour >= NIGHT_START or hour < NIGHT_END
+    start = runtime_night_start()
+    end = runtime_night_end()
+    return hour >= start or hour < end
 
 
 def resolve_mode(tv_online: bool = True) -> str:
@@ -498,7 +557,7 @@ class HueEntertainmentSink:
 
             # Brightness scaling
             if is_night():
-                scale = NIGHT_HUE_BRI / 255.0
+                scale = runtime_night_hue_bri() / 255.0
             else:
                 scale = m.get("brightness", 254) / 254.0
             r = int(r * scale)
@@ -578,7 +637,7 @@ class HueSink:
                 continue
 
             x, y = rgb_to_xy(r, g, b)
-            max_bri = NIGHT_HUE_BRI if is_night() else m.get("brightness", 254)
+            max_bri = runtime_night_hue_bri() if is_night() else m.get("brightness", 254)
             # Brightness proportionnelle à la luminosité de la couleur boostée
             scene_bri = max(r, g, b) * max_bri // 255
             bri = min(254, max(1, scene_bri))
@@ -606,7 +665,7 @@ class GoveeSink:
     def _target_brightness(self, night: bool | None = None) -> int:
         if night is None:
             night = is_night()
-        return NIGHT_GOVEE_BRI if night else self.brightness
+        return runtime_night_govee_bri() if night else self.brightness
 
     def _set_brightness(self, value: int):
         msg = json.dumps({'msg': {'cmd': 'brightness', 'data': {'value': value}}})
@@ -766,9 +825,10 @@ class OpenRGBSink:
         self.last["dom"] = (r, g, b)
 
         if is_night():
-            r = int(r * NIGHT_LED_SCALE)
-            g = int(g * NIGHT_LED_SCALE)
-            b = int(b * NIGHT_LED_SCALE)
+            scale = runtime_night_led_scale()
+            r = int(r * scale)
+            g = int(g * scale)
+            b = int(b * scale)
 
         color = RGBColor(r, g, b)
 
@@ -891,7 +951,7 @@ def run():
             last_transport = transport
 
         hue_day_bri = max((m.get("brightness", 254) for m in cfg["mapping"]), default=254)
-        hue_target_bri = NIGHT_HUE_BRI if is_night() else hue_day_bri
+        hue_target_bri = runtime_night_hue_bri() if is_night() else hue_day_bri
         status.write("ambilight_mode", mode)
         status.write("ambilight_transport", transport)
         status.write("govee_target_brightness", govee._target_brightness() if govee else 0)

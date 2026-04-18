@@ -36,6 +36,7 @@ def main() -> None:
         REPO_ROOT / "ha_config" / "automations.yaml",
         REPO_ROOT / "ha_config" / "scripts.yaml",
         REPO_ROOT / "ha_config" / "ui-lovelace.yaml",
+        REPO_ROOT / "ha_config" / "ambilight_profiles.yaml",
         REPO_ROOT / "ambisync_config" / "config.example.yml",
         REPO_ROOT / "ha_config" / "secrets.example.yaml",
     ]

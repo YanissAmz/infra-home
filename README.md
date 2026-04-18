@@ -165,6 +165,22 @@ make deploy-ambilight
 Runtime day/night tuning is exposed directly in Home Assistant under `Services > Ambilight Sync > Reglages runtime`.
 Those helpers write `/config/runtime/overrides.json`, which the sync reloads live without a service restart.
 
+### Central control plane
+
+The ambilight stack now routes high-level actions through a single local controller instead of duplicating logic across HA automations:
+
+- `dashboard/backend/controllers/ambilight_control.py` is the source of truth for `mode`, `profile`, `power_state`, HYTE mode, and PC mode
+- `ha_config/ambilight_control_api.py` is the HA-side wrapper used by `shell_command.*`
+- `ha_config/ambilight_profiles.yaml` defines the global profiles (`movie_day`, `movie_night`, `gaming`, `reading`, `sleep`, `off`)
+- controller state lives in `ha_config/runtime/ambilight_controller_state.json`
+- status files exposed to HA live in `ha_config/status/`
+
+Important behavior:
+
+- `TV OFF` and `Tout OFF` now cut outputs without losing the current base scene
+- next `TV ON` restores the active controller scene instead of getting stuck on a persistent `off` profile
+- HA startup restores the last controller state via `ambilight_controller_bootstrap`
+
 ### Manual vs auto runtime controls
 
 The `Services > Ambilight Sync` view now exposes two separate control layers:
@@ -236,6 +252,12 @@ The Lovelace dashboard includes 5 views:
 | Gaming | Blue + Pink, vivid | Gaming session |
 | Lecture | Full brightness, neutral | Reading |
 | Nuit | Minimal, warmest | Bedtime |
+
+Scene selection is now controller-backed:
+
+- `Cinema` maps to the `movie` profile and resolves to `movie_day` or `movie_night` depending on controller mode
+- `Gaming`, `Lecture`, and `Nuit` map to dedicated global profiles
+- `Tout OFF` powers down outputs while preserving the next resume scene
 
 ### Hue Dimmer Switch mapping
 

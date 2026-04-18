@@ -2,152 +2,26 @@ apply_mode_jour:
   alias: Appliquer mode jour
   mode: restart
   sequence:
-  - service: shell_command.ambilight_power_on
+  - service: shell_command.ambilight_ctl_mode_day
     continue_on_error: true
-  - delay: '00:00:02'
-  - service: light.turn_on
-    target:
-      entity_id: light.philips_ambilight_ambilight
-    data:
-      effect: Vivid
-      brightness: 255
-    continue_on_error: true
-  - service: shell_command.ambilight_vivid
-    continue_on_error: true
-  - delay: '00:00:02'
-  - service: shell_command.ambilight_brightness_high
-    continue_on_error: true
-  - service: shell_command.hue_mode_day
-    continue_on_error: true
-  - service: script.apply_hyte_ambilight_profile
+  - service: shell_command.ambilight_ctl_power_on
     continue_on_error: true
 
 apply_mode_nuit:
   alias: Appliquer mode nuit
   mode: restart
   sequence:
-  - service: shell_command.ambilight_power_on
+  - service: shell_command.ambilight_ctl_mode_night
     continue_on_error: true
-  - delay: '00:00:02'
-  - service: light.turn_on
-    target:
-      entity_id: light.philips_ambilight_ambilight
-    data:
-      effect: Natural
-      brightness: 100
-    continue_on_error: true
-  - service: shell_command.ambilight_natural
-    continue_on_error: true
-  - delay: '00:00:02'
-  - service: shell_command.ambilight_brightness_low
-    continue_on_error: true
-  - service: shell_command.hue_mode_night
-    continue_on_error: true
-  - service: script.apply_hyte_ambilight_profile
+  - service: shell_command.ambilight_ctl_power_on
     continue_on_error: true
 
 apply_hyte_ambilight_profile:
   alias: Appliquer profil HYTE ambilight
   mode: restart
   sequence:
-  - choose:
-    - conditions:
-      - condition: state
-        entity_id: input_boolean.ambilight_hyte_auto_sync
-        state: 'on'
-      sequence:
-      - choose:
-        - conditions:
-          - condition: state
-            entity_id: input_select.ambilight_hyte_profile_night
-            state: soft
-          - condition: or
-            conditions:
-            - condition: state
-              entity_id: input_boolean.force_night_mode
-              state: 'on'
-            - condition: and
-              conditions:
-              - condition: state
-                entity_id: input_boolean.force_day_mode
-                state: 'off'
-              - condition: time
-                after: '22:00:00'
-                before: '06:00:00'
-          sequence:
-          - service: shell_command.hyte_profile_soft
-            continue_on_error: true
-        - conditions:
-          - condition: state
-            entity_id: input_select.ambilight_hyte_profile_night
-            state: normal
-          - condition: or
-            conditions:
-            - condition: state
-              entity_id: input_boolean.force_night_mode
-              state: 'on'
-            - condition: and
-              conditions:
-              - condition: state
-                entity_id: input_boolean.force_day_mode
-                state: 'off'
-              - condition: time
-                after: '22:00:00'
-                before: '06:00:00'
-          sequence:
-          - service: shell_command.hyte_profile_normal
-            continue_on_error: true
-        - conditions:
-          - condition: or
-            conditions:
-            - condition: state
-              entity_id: input_boolean.force_night_mode
-              state: 'on'
-            - condition: and
-              conditions:
-              - condition: state
-                entity_id: input_boolean.force_day_mode
-                state: 'off'
-              - condition: time
-                after: '22:00:00'
-                before: '06:00:00'
-          sequence:
-          - service: shell_command.hyte_profile_punchy
-            continue_on_error: true
-        - conditions:
-          - condition: state
-            entity_id: input_select.ambilight_hyte_profile_day
-            state: soft
-          sequence:
-          - service: shell_command.hyte_profile_soft
-            continue_on_error: true
-        - conditions:
-          - condition: state
-            entity_id: input_select.ambilight_hyte_profile_day
-            state: normal
-          sequence:
-          - service: shell_command.hyte_profile_normal
-            continue_on_error: true
-        default:
-        - service: shell_command.hyte_profile_punchy
-          continue_on_error: true
-    - conditions:
-      - condition: state
-        entity_id: input_select.ambilight_hyte_profile_manual
-        state: soft
-      sequence:
-      - service: shell_command.hyte_profile_soft
-        continue_on_error: true
-    - conditions:
-      - condition: state
-        entity_id: input_select.ambilight_hyte_profile_manual
-        state: normal
-      sequence:
-      - service: shell_command.hyte_profile_normal
-        continue_on_error: true
-    default:
-    - service: shell_command.hyte_profile_punchy
-      continue_on_error: true
+  - service: shell_command.ambilight_ctl_hyte_sync
+    continue_on_error: true
 
 mode_jour_now:
   alias: Mode jour maintenant
@@ -190,7 +64,7 @@ mode_auto_jour_now:
       - input_boolean.force_night_mode
   - service: shell_command.force_day_off
   - service: shell_command.force_night_off
-  - service: script.apply_mode_jour
+  - service: shell_command.ambilight_ctl_mode_auto
     continue_on_error: true
 
 mode_auto_nuit_now:
@@ -204,38 +78,15 @@ mode_auto_nuit_now:
       - input_boolean.force_night_mode
   - service: shell_command.force_day_off
   - service: shell_command.force_night_off
-  - service: script.apply_mode_nuit
+  - service: shell_command.ambilight_ctl_mode_auto
     continue_on_error: true
 
 sync_ambilight_mode_now:
   alias: Synchroniser mode ambilight maintenant
   mode: restart
   sequence:
-  - choose:
-    - conditions:
-      - condition: state
-        entity_id: input_boolean.force_night_mode
-        state: 'on'
-      sequence:
-      - service: script.apply_mode_nuit
-        continue_on_error: true
-    - conditions:
-      - condition: state
-        entity_id: input_boolean.force_day_mode
-        state: 'on'
-      sequence:
-      - service: script.apply_mode_jour
-        continue_on_error: true
-    - conditions:
-      - condition: time
-        after: '22:00:00'
-        before: '06:00:00'
-      sequence:
-      - service: script.apply_mode_nuit
-        continue_on_error: true
-    default:
-    - service: script.apply_mode_jour
-      continue_on_error: true
+  - service: shell_command.ambilight_ctl_power_on
+    continue_on_error: true
 
 mode_auto_now:
   alias: Mode auto maintenant
@@ -248,7 +99,7 @@ mode_auto_now:
       - input_boolean.force_night_mode
   - service: shell_command.force_day_off
   - service: shell_command.force_night_off
-  - service: script.sync_ambilight_mode_now
+  - service: shell_command.ambilight_ctl_mode_auto
     continue_on_error: true
 
 apply_ambilight_runtime_settings:
@@ -256,6 +107,8 @@ apply_ambilight_runtime_settings:
   mode: restart
   sequence:
   - service: shell_command.ambilight_runtime_write
+    continue_on_error: true
+  - service: shell_command.ambilight_ctl_pc_sync
     continue_on_error: true
 
 pc_leds_manual_high_now:
@@ -342,37 +195,33 @@ scene_cinema_now:
   alias: Scene cinema maintenant
   mode: restart
   sequence:
-  - service: shell_command.hue_scene_cinema
+  - service: shell_command.ambilight_ctl_profile_movie
     continue_on_error: true
 
 scene_gaming_now:
   alias: Scene gaming maintenant
   mode: restart
   sequence:
-  - service: shell_command.hue_scene_gaming
+  - service: shell_command.ambilight_ctl_profile_gaming
     continue_on_error: true
 
 scene_lecture_now:
   alias: Scene lecture maintenant
   mode: restart
   sequence:
-  - service: shell_command.hue_scene_lecture
+  - service: shell_command.ambilight_ctl_profile_reading
     continue_on_error: true
 
 scene_nuit_now:
   alias: Scene nuit maintenant
   mode: restart
   sequence:
-  - service: shell_command.hue_scene_night
+  - service: shell_command.ambilight_ctl_profile_sleep
     continue_on_error: true
 
 scene_off_now:
   alias: Tout eteindre maintenant
   mode: restart
   sequence:
-  - service: shell_command.hue_all_off
-    continue_on_error: true
-  - service: shell_command.govee_off
-    continue_on_error: true
-  - service: shell_command.ambilight_power_off
+  - service: shell_command.ambilight_ctl_power_off
     continue_on_error: true

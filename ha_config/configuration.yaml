@@ -121,6 +121,29 @@ shell_command:
   ambisync_restart: "echo ambisync_restart > /config/commands/sync_$(date +%s).cmd"
   ambisync_stop: "echo ambisync_stop > /config/commands/sync_$(date +%s).cmd"
   ambisync_start: "echo ambisync_start > /config/commands/sync_$(date +%s).cmd"
+  ambilight_ctl_apply_current: "python3 /config/ambilight_control_api.py apply ha"
+  ambilight_ctl_bootstrap: "python3 /config/ambilight_control_api.py bootstrap"
+  ambilight_ctl_mode_day: "python3 /config/ambilight_control_api.py mode day"
+  ambilight_ctl_mode_night: "python3 /config/ambilight_control_api.py mode night"
+  ambilight_ctl_mode_auto: "python3 /config/ambilight_control_api.py mode auto"
+  ambilight_ctl_profile_movie: "python3 /config/ambilight_control_api.py profile movie"
+  ambilight_ctl_profile_gaming: "python3 /config/ambilight_control_api.py profile gaming"
+  ambilight_ctl_profile_reading: "python3 /config/ambilight_control_api.py profile reading"
+  ambilight_ctl_profile_sleep: "python3 /config/ambilight_control_api.py profile sleep"
+  ambilight_ctl_profile_off: "python3 /config/ambilight_control_api.py profile off"
+  ambilight_ctl_power_on: "python3 /config/ambilight_control_api.py power on"
+  ambilight_ctl_power_off: "python3 /config/ambilight_control_api.py power off"
+  ambilight_ctl_hyte_sync: >-
+    python3 /config/ambilight_control_api.py hyte-sync
+    {{ 1 if is_state("input_boolean.ambilight_hyte_auto_sync", "on") else 0 }}
+    {{ states("input_select.ambilight_hyte_profile_manual") }}
+  ambilight_ctl_pc_sync: >-
+    python3 /config/ambilight_control_api.py pc-sync
+    {{ 1 if is_state("input_boolean.ambilight_pc_auto_sync", "on") else 0 }}
+    {{ states("input_number.ambilight_led_night_scale_pct")|int }}
+  ambilight_ctl_sync_restart: "python3 /config/ambilight_control_api.py sync-service restart"
+  ambilight_ctl_sync_stop: "python3 /config/ambilight_control_api.py sync-service stop"
+  ambilight_ctl_sync_start: "python3 /config/ambilight_control_api.py sync-service start"
   # Ambilight style via JointSPACE API (fallback when custom_ambilight fails)
   ambilight_natural: !secret shell_ambilight_natural
   ambilight_vivid: !secret shell_ambilight_vivid
@@ -200,6 +223,18 @@ command_line:
   - sensor:
       name: Ambilight Color
       command: "cat /config/status/ambilight_color.txt 2>/dev/null || echo 0,0,0"
+      scan_interval: 15
+  - sensor:
+      name: Ambilight Active Profile
+      command: "cat /config/status/ambilight_active_profile.txt 2>/dev/null || echo unknown"
+      scan_interval: 15
+  - sensor:
+      name: Ambilight Controller Mode
+      command: "cat /config/status/ambilight_controller_mode.txt 2>/dev/null || echo unknown"
+      scan_interval: 15
+  - sensor:
+      name: Ambilight Power State
+      command: "cat /config/status/ambilight_power_state.txt 2>/dev/null || echo unknown"
       scan_interval: 15
   - sensor:
       name: HYTE Ambilight Profile

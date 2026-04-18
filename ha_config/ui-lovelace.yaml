@@ -203,6 +203,15 @@ views:
               - entity: sensor.ambilight_mode
                 name: Mode courant
                 icon: mdi:tune-variant
+              - entity: sensor.ambilight_controller_mode
+                name: Mode controleur
+                icon: mdi:state-machine
+              - entity: sensor.ambilight_power_state
+                name: Power outputs
+                icon: mdi:power
+              - entity: sensor.ambilight_active_profile
+                name: Profil actif
+                icon: mdi:palette-swatch
               - entity: sensor.ambilight_transport
                 name: Transport Hue
                 icon: mdi:lightning-bolt
@@ -274,6 +283,7 @@ views:
               `HYTE auto` suit les profils jour/nuit.
               `LEDs PC auto` redonne la main au niveau nuit configure.
               En manuel, HYTE reste sur son profil choisi et le PC reste a `100%` la nuit.
+              `Tout OFF` coupe les sorties sans perdre la scene de reprise pour le prochain `TV ON`.
           - type: horizontal-stack
             cards:
               - type: button
@@ -328,21 +338,21 @@ views:
                 icon_height: 35px
                 tap_action:
                   action: call-service
-                  service: shell_command.ambisync_restart
+                  service: shell_command.ambilight_ctl_sync_restart
               - type: button
                 name: Stop Sync
                 icon: mdi:stop
                 icon_height: 35px
                 tap_action:
                   action: call-service
-                  service: shell_command.ambisync_stop
+                  service: shell_command.ambilight_ctl_sync_stop
               - type: button
                 name: Start Sync
                 icon: mdi:play
                 icon_height: 35px
                 tap_action:
                   action: call-service
-                  service: shell_command.ambisync_start
+                  service: shell_command.ambilight_ctl_sync_start
 
       # Pi-hole carte désactivée 2026-04-09 (container supprimé, NextDNS gère l'ad-blocking)
       # - type: vertical-stack

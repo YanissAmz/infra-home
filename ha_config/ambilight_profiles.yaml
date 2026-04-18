@@ -1,0 +1,52 @@
+profiles:
+  movie_day:
+    ambilight:
+      power: on
+      style: vivid
+      brightness: high
+    hue_action: movie_day
+    govee_power: on
+    hyte_profile: punchy
+
+  movie_night:
+    ambilight:
+      power: on
+      style: natural
+      brightness: low
+    hue_action: movie_night
+    govee_power: on
+    hyte_profile: soft
+
+  gaming:
+    ambilight:
+      power: on
+      style: vivid
+      brightness: high
+    hue_action: scene_gaming
+    govee_power: on
+    hyte_profile: punchy
+
+  reading:
+    ambilight:
+      power: on
+      style: vivid
+      brightness: high
+    hue_action: scene_reading
+    govee_power: on
+    hyte_profile: normal
+
+  sleep:
+    ambilight:
+      power: on
+      style: natural
+      brightness: low
+    hue_action: scene_sleep
+    govee_power: on
+    hyte_profile: soft
+
+  off:
+    ambilight:
+      power: off
+    hue_action: all_off
+    govee_power: off
+    hyte_profile: soft

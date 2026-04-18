@@ -1,5 +1,15 @@
+- id: ambilight_controller_bootstrap
+  alias: HA start → restaurer etat ambilight
+  trigger:
+  - platform: homeassistant
+    event: start
+  action:
+  - delay: '00:00:45'
+  - service: shell_command.ambilight_ctl_bootstrap
+    continue_on_error: true
+
 - id: tv_on_ambilight_vivid
-  alias: TV ON → Ambilight Vivid
+  alias: TV ON jour → restaurer scene active
   trigger:
   - platform: state
     entity_id: binary_sensor.tv_philips_power
@@ -16,21 +26,7 @@
   trigger:
   - platform: time
     at: '22:00:00'
-    id: schedule
-  - platform: homeassistant
-    event: start
-    id: startup
-  condition:
-  - condition: time
-    after: '22:00:00'
-    before: '06:00:00'
   action:
-  - choose:
-    - conditions:
-      - condition: trigger
-        id: startup
-      sequence:
-      - delay: '00:00:45'
   - service: script.mode_auto_nuit_now
     continue_on_error: true
 - id: morning_mode_ambilight
@@ -38,25 +34,11 @@
   trigger:
   - platform: time
     at: '06:00:00'
-    id: schedule
-  - platform: homeassistant
-    event: start
-    id: startup
-  condition:
-  - condition: time
-    after: '06:00:00'
-    before: '22:00:00'
   action:
-  - choose:
-    - conditions:
-      - condition: trigger
-        id: startup
-      sequence:
-      - delay: '00:00:45'
   - service: script.mode_auto_jour_now
     continue_on_error: true
 - id: tv_on_after_22h
-  alias: TV ON après 22h → Ambilight doux
+  alias: TV ON nuit → restaurer scene active
   trigger:
   - platform: state
     entity_id: binary_sensor.tv_philips_power
@@ -85,8 +67,8 @@
     to: 'off'
     for: 02:00:00
   action:
-  - service: shell_command.hue_all_off
-  - service: shell_command.govee_off
+  - service: script.scene_off_now
+    continue_on_error: true
 - id: tv_on_hue_on
   alias: TV ON → Hue ON (lamps + plug Govee)
   # Trigger principal : binary_sensor.tv_philips_power (JointSPACE /powerstate)
@@ -106,7 +88,8 @@
     entity_id: media_player.bedroom_tv
     to: 'on'
   action:
-  - service: shell_command.hue_tv_on
+  - service: script.sync_ambilight_mode_now
+    continue_on_error: true
 
 # ─── FORCE DAY MODE OVERRIDE ───
 - id: force_day_mode_on
@@ -231,7 +214,7 @@
     entity_id: input_boolean.ambilight_watchdog_auto_restart
     state: 'on'
   action:
-  - service: shell_command.ambisync_restart
+  - service: shell_command.ambilight_ctl_sync_restart
 
 # ─── CRASH HARD TOUR ───
 # Si la Tour GPU disparait du reseau >60s (panic kernel, panne hardware,
@@ -245,8 +228,8 @@
     to: 'off'
     for: 00:01:00
   action:
-  - service: shell_command.hue_all_off
-  - service: shell_command.govee_off
+  - service: script.scene_off_now
+    continue_on_error: true
 
 # ─── TELECOMMANDE HUE ───
 
@@ -259,7 +242,8 @@
     attribute: event_type
     to: short_release
   action:
-  - service: shell_command.hue_mode_day
+  - service: script.sync_ambilight_mode_now
+    continue_on_error: true
 
 # Bouton 1 - appui long : scene gaming
 - id: remote_btn1_long

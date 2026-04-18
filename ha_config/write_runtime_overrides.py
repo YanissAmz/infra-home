@@ -7,12 +7,17 @@ import sys
 from pathlib import Path
 
 
-if len(sys.argv) != 8:
+if len(sys.argv) != 9:
     raise SystemExit(
-        "usage: write_runtime_overrides.py start end hue_pct govee_pct led_pct delta_day delta_night"
+        "usage: write_runtime_overrides.py start end hue_pct govee_pct led_pct delta_day delta_night pc_auto_sync"
     )
 
-start, end, hue_pct, govee_pct, led_pct, delta_day, delta_night = map(int, sys.argv[1:])
+start, end, hue_pct, govee_pct, led_pct, delta_day, delta_night, pc_auto_sync = map(
+    int, sys.argv[1:]
+)
+
+if pc_auto_sync == 0:
+    led_pct = 100
 
 payload = {
     "night": {

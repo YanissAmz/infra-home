@@ -21,6 +21,10 @@ views:
       - type: vertical-stack
         title: Eclairage Hue
         cards:
+          - type: markdown
+            content: |
+              Lampe 1 / 2 sont preparees dans HA mais pas encore branchees.
+              La prise Zigbee reste le relai mesh actif pour l'instant.
           - type: horizontal-stack
             cards:
               - type: light
@@ -208,6 +212,12 @@ views:
               - entity: sensor.hue_target_brightness
                 name: Cible Hue
                 icon: mdi:lightbulb-multiple
+              - entity: sensor.hyte_ambilight_profile
+                name: Profil HYTE
+                icon: mdi:monitor-star
+              - entity: sensor.ambilight_watchdog
+                name: Watchdog
+                icon: mdi:shield-check
               - entity: sensor.openrgb_server_status
                 name: OpenRGB Server
                 icon: mdi:led-strip-variant
@@ -217,6 +227,15 @@ views:
               - entity: input_boolean.force_night_mode
                 name: Mode nuit force
                 icon: mdi:weather-night
+              - entity: input_boolean.ambilight_pc_auto_sync
+                name: LEDs PC auto
+                icon: mdi:desktop-tower-monitor
+              - entity: input_boolean.ambilight_hyte_auto_sync
+                name: HYTE auto
+                icon: mdi:monitor-dashboard
+              - entity: input_boolean.ambilight_watchdog_auto_restart
+                name: Watchdog auto restart
+                icon: mdi:restart-alert
           - type: entities
             title: Reglages runtime
             entities:
@@ -234,6 +253,15 @@ views:
                 name: Delta jour
               - entity: input_number.ambilight_delta_threshold_night
                 name: Delta nuit
+          - type: entities
+            title: HYTE
+            entities:
+              - entity: input_select.ambilight_hyte_profile_manual
+                name: Profil manuel
+              - entity: input_select.ambilight_hyte_profile_day
+                name: Profil auto jour
+              - entity: input_select.ambilight_hyte_profile_night
+                name: Profil auto nuit
           - type: horizontal-stack
             cards:
               - type: button

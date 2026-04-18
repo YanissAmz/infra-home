@@ -19,6 +19,8 @@ apply_mode_jour:
     continue_on_error: true
   - service: shell_command.hue_mode_day
     continue_on_error: true
+  - service: script.apply_hyte_ambilight_profile
+    continue_on_error: true
 
 apply_mode_nuit:
   alias: Appliquer mode nuit
@@ -41,6 +43,111 @@ apply_mode_nuit:
     continue_on_error: true
   - service: shell_command.hue_mode_night
     continue_on_error: true
+  - service: script.apply_hyte_ambilight_profile
+    continue_on_error: true
+
+apply_hyte_ambilight_profile:
+  alias: Appliquer profil HYTE ambilight
+  mode: restart
+  sequence:
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: input_boolean.ambilight_hyte_auto_sync
+        state: 'on'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: state
+            entity_id: input_select.ambilight_hyte_profile_night
+            state: soft
+          - condition: or
+            conditions:
+            - condition: state
+              entity_id: input_boolean.force_night_mode
+              state: 'on'
+            - condition: and
+              conditions:
+              - condition: state
+                entity_id: input_boolean.force_day_mode
+                state: 'off'
+              - condition: time
+                after: '22:00:00'
+                before: '06:00:00'
+          sequence:
+          - service: shell_command.hyte_profile_soft
+            continue_on_error: true
+        - conditions:
+          - condition: state
+            entity_id: input_select.ambilight_hyte_profile_night
+            state: normal
+          - condition: or
+            conditions:
+            - condition: state
+              entity_id: input_boolean.force_night_mode
+              state: 'on'
+            - condition: and
+              conditions:
+              - condition: state
+                entity_id: input_boolean.force_day_mode
+                state: 'off'
+              - condition: time
+                after: '22:00:00'
+                before: '06:00:00'
+          sequence:
+          - service: shell_command.hyte_profile_normal
+            continue_on_error: true
+        - conditions:
+          - condition: or
+            conditions:
+            - condition: state
+              entity_id: input_boolean.force_night_mode
+              state: 'on'
+            - condition: and
+              conditions:
+              - condition: state
+                entity_id: input_boolean.force_day_mode
+                state: 'off'
+              - condition: time
+                after: '22:00:00'
+                before: '06:00:00'
+          sequence:
+          - service: shell_command.hyte_profile_punchy
+            continue_on_error: true
+        - conditions:
+          - condition: state
+            entity_id: input_select.ambilight_hyte_profile_day
+            state: soft
+          sequence:
+          - service: shell_command.hyte_profile_soft
+            continue_on_error: true
+        - conditions:
+          - condition: state
+            entity_id: input_select.ambilight_hyte_profile_day
+            state: normal
+          sequence:
+          - service: shell_command.hyte_profile_normal
+            continue_on_error: true
+        default:
+        - service: shell_command.hyte_profile_punchy
+          continue_on_error: true
+    - conditions:
+      - condition: state
+        entity_id: input_select.ambilight_hyte_profile_manual
+        state: soft
+      sequence:
+      - service: shell_command.hyte_profile_soft
+        continue_on_error: true
+    - conditions:
+      - condition: state
+        entity_id: input_select.ambilight_hyte_profile_manual
+        state: normal
+      sequence:
+      - service: shell_command.hyte_profile_normal
+        continue_on_error: true
+    default:
+    - service: shell_command.hyte_profile_punchy
+      continue_on_error: true
 
 mode_jour_now:
   alias: Mode jour maintenant

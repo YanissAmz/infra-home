@@ -163,12 +163,75 @@
     - input_number.ambilight_led_night_scale_pct
     - input_number.ambilight_delta_threshold_day
     - input_number.ambilight_delta_threshold_night
+    - input_boolean.ambilight_pc_auto_sync
   - platform: homeassistant
     event: start
   action:
   - delay: '00:00:10'
   - service: script.apply_ambilight_runtime_settings
     continue_on_error: true
+
+- id: hyte_ambilight_apply_on_change
+  alias: Reglages HYTE ambilight → appliquer
+  trigger:
+  - platform: state
+    entity_id:
+    - input_boolean.ambilight_hyte_auto_sync
+    - input_select.ambilight_hyte_profile_manual
+    - input_select.ambilight_hyte_profile_day
+    - input_select.ambilight_hyte_profile_night
+    - input_boolean.force_day_mode
+    - input_boolean.force_night_mode
+  - platform: homeassistant
+    event: start
+  action:
+  - delay: '00:00:15'
+  - service: script.apply_hyte_ambilight_profile
+    continue_on_error: true
+
+- id: ambilight_watchdog_notify
+  alias: Watchdog ambilight → notification
+  trigger:
+  - platform: state
+    entity_id: sensor.ambilight_watchdog
+    to: stale
+    for: 00:03:00
+  action:
+  - service: persistent_notification.create
+    data:
+      notification_id: ambilight_watchdog
+      title: Ambilight watchdog
+      message: >-
+        Etat={{ states("sensor.ambilight_watchdog") }}
+        | mode={{ state_attr("sensor.ambilight_watchdog", "mode") }}
+        | TV={{ state_attr("sensor.ambilight_watchdog", "tv_power") }}
+        | issues={{ state_attr("sensor.ambilight_watchdog", "issues") }}
+
+- id: ambilight_watchdog_clear
+  alias: Watchdog ambilight → clear notification
+  trigger:
+  - platform: state
+    entity_id: sensor.ambilight_watchdog
+    to: ok
+    for: 00:02:00
+  action:
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: ambilight_watchdog
+
+- id: ambilight_watchdog_restart
+  alias: Watchdog ambilight → auto restart
+  trigger:
+  - platform: state
+    entity_id: sensor.ambilight_watchdog
+    to: stale
+    for: 00:15:00
+  condition:
+  - condition: state
+    entity_id: input_boolean.ambilight_watchdog_auto_restart
+    state: 'on'
+  action:
+  - service: shell_command.ambisync_restart
 
 # ─── CRASH HARD TOUR ───
 # Si la Tour GPU disparait du reseau >60s (panic kernel, panne hardware,

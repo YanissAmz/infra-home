@@ -11,6 +11,41 @@ input_boolean:
   force_night_mode:
     name: Mode nuit force
     icon: mdi:weather-night
+  ambilight_pc_auto_sync:
+    name: LEDs PC sync auto nuit/jour
+    icon: mdi:desktop-tower-monitor
+  ambilight_hyte_auto_sync:
+    name: HYTE sync auto nuit/jour
+    icon: mdi:monitor-dashboard
+  ambilight_watchdog_auto_restart:
+    name: Watchdog ambilight auto restart
+    icon: mdi:restart-alert
+
+input_select:
+  ambilight_hyte_profile_manual:
+    name: HYTE profil manuel
+    options:
+      - punchy
+      - normal
+      - soft
+    initial: punchy
+    icon: mdi:monitor-star
+  ambilight_hyte_profile_day:
+    name: HYTE profil jour auto
+    options:
+      - punchy
+      - normal
+      - soft
+    initial: punchy
+    icon: mdi:white-balance-sunny
+  ambilight_hyte_profile_night:
+    name: HYTE profil nuit auto
+    options:
+      - soft
+      - normal
+      - punchy
+    initial: soft
+    icon: mdi:weather-night
 
 input_number:
   ambilight_night_start_hour:
@@ -111,6 +146,9 @@ shell_command:
   hue_scene_night: !secret shell_hue_scene_night
   hue_brightness_up: !secret shell_hue_brightness_up
   hue_brightness_down: !secret shell_hue_brightness_down
+  hyte_profile_soft: "python3 /config/hyte_ambilight_profile.py set soft >/dev/null"
+  hyte_profile_normal: "python3 /config/hyte_ambilight_profile.py set normal >/dev/null"
+  hyte_profile_punchy: "python3 /config/hyte_ambilight_profile.py set punchy >/dev/null"
   # Force day mode override — touche/supprime un flag fichier que le sync python lit dans is_night()
   force_day_on: "touch /config/.force_day"
   force_day_off: "rm -f /config/.force_day"
@@ -125,6 +163,7 @@ shell_command:
     {{ states("input_number.ambilight_led_night_scale_pct")|int }}
     {{ states("input_number.ambilight_delta_threshold_day")|int }}
     {{ states("input_number.ambilight_delta_threshold_night")|int }}
+    {{ 1 if is_state("input_boolean.ambilight_pc_auto_sync", "on") else 0 }}
   # Firestick apps via ADB
   firestick_hd_stremio: !secret shell_firestick_hd_stremio
   firestick_hd_youtube: !secret shell_firestick_hd_youtube
@@ -162,6 +201,24 @@ command_line:
       name: Ambilight Color
       command: "cat /config/status/ambilight_color.txt 2>/dev/null || echo 0,0,0"
       scan_interval: 15
+  - sensor:
+      name: HYTE Ambilight Profile
+      command: "python3 /config/hyte_ambilight_profile.py get 2>/dev/null || echo unknown"
+      scan_interval: 30
+  - sensor:
+      name: Ambilight Watchdog
+      command: "python3 /config/check_ambilight_watchdog.py"
+      value_template: "{{ value_json.state }}"
+      json_attributes:
+        - issues
+        - mode_age_s
+        - ambilight_color_age_s
+        - transport_age_s
+        - govee_target_age_s
+        - hue_target_age_s
+        - tv_power
+        - mode
+      scan_interval: 60
   # Pi-hole sensor désactivé 2026-04-09 (container Pi-hole supprimé, NextDNS gère l'ad-blocking)
   # - sensor:
   #     name: Pi-hole Blocked Today

@@ -47,6 +47,8 @@ input_number:
     mode: slider
     initial: 1
     unit_of_measurement: "%"
+  # Keep PC LEDs vivid at night for now; lower this later to sync them with
+  # the automatic day/night profile again.
   ambilight_led_night_scale_pct:
     name: LEDs PC nuit intensite
     icon: mdi:memory
@@ -54,7 +56,7 @@ input_number:
     max: 100
     step: 1
     mode: slider
-    initial: 30
+    initial: 100
     unit_of_measurement: "%"
   ambilight_delta_threshold_day:
     name: Ambilight delta jour

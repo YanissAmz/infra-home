@@ -165,6 +165,36 @@ make deploy-ambilight
 Runtime day/night tuning is exposed directly in Home Assistant under `Services > Ambilight Sync > Reglages runtime`.
 Those helpers write `/config/runtime/overrides.json`, which the sync reloads live without a service restart.
 
+### Manual vs auto runtime controls
+
+The `Services > Ambilight Sync` view now exposes two separate control layers:
+
+- `HYTE auto` / `HYTE Soft` / `HYTE Normal` / `HYTE Punchy`
+- `PC Auto` / `PC Manuel haut`
+
+Current behavior:
+
+- `HYTE auto` follows `Profil auto jour` and `Profil auto nuit`
+- `HYTE manual` pins the dashboard to the chosen profile until you re-enable auto
+- `PC Auto` lets night scaling use `LEDs PC nuit intensite`
+- `PC Manuel haut` forces the PC LEDs to stay vivid at night by writing `100%` into the runtime override layer
+
+Two summary sensors make this visible in HA:
+
+- `sensor.ambilight_hyte_mode`
+- `sensor.ambilight_pc_mode`
+
+### Passive watchdog
+
+The ambilight watchdog is intentionally passive.
+
+- It does **not** poll the TV, Hue Bridge, Govee, or OpenRGB directly
+- It only inspects the local status files already refreshed by `ambilight_unified_sync.py`
+- It raises a persistent notification after `3 min` of stale state
+- Optional auto-restart exists, but stays disabled by default and waits `15 min`
+
+This avoids the aggressive polling loops that previously caused side effects during gaming sessions.
+
 **Access:**
 - Home Assistant: `http://localhost:8123`
 - Pi-hole admin: `http://localhost:8081/admin`

@@ -263,6 +263,33 @@ command_line:
       scan_interval: 30
       device_class: connectivity
 
+template:
+  - sensor:
+      - name: Ambilight PC Mode
+        icon: mdi:desktop-tower-monitor
+        state: >-
+          {% if is_state('input_boolean.ambilight_pc_auto_sync', 'on') %}
+            auto
+          {% else %}
+            manual_high
+          {% endif %}
+      - name: Ambilight HYTE Mode
+        icon: mdi:monitor-dashboard
+        state: >-
+          {% if is_state('input_boolean.ambilight_hyte_auto_sync', 'on') %}
+            {% set hour = now().hour %}
+            {% set scheduled_night = hour >= 22 or hour < 6 %}
+            {% set night = is_state('input_boolean.force_night_mode', 'on')
+              or (is_state('input_boolean.force_day_mode', 'off') and scheduled_night) %}
+            {% if night %}
+              auto_{{ states('input_select.ambilight_hyte_profile_night') }}
+            {% else %}
+              auto_{{ states('input_select.ambilight_hyte_profile_day') }}
+            {% endif %}
+          {% else %}
+            manual_{{ states('input_select.ambilight_hyte_profile_manual') }}
+          {% endif %}
+
 lovelace:
   dashboards:
     lovelace-home:

@@ -215,6 +215,12 @@ views:
               - entity: sensor.hyte_ambilight_profile
                 name: Profil HYTE
                 icon: mdi:monitor-star
+              - entity: sensor.ambilight_hyte_mode
+                name: Mode HYTE
+                icon: mdi:monitor-dashboard
+              - entity: sensor.ambilight_pc_mode
+                name: Mode LEDs PC
+                icon: mdi:desktop-tower-monitor
               - entity: sensor.ambilight_watchdog
                 name: Watchdog
                 icon: mdi:shield-check
@@ -262,6 +268,58 @@ views:
                 name: Profil auto jour
               - entity: input_select.ambilight_hyte_profile_night
                 name: Profil auto nuit
+          - type: markdown
+            title: Raccourcis
+            content: |
+              `HYTE auto` suit les profils jour/nuit.
+              `LEDs PC auto` redonne la main au niveau nuit configure.
+              En manuel, HYTE reste sur son profil choisi et le PC reste a `100%` la nuit.
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: HYTE Soft
+                icon: mdi:blur
+                icon_height: 35px
+                tap_action:
+                  action: call-service
+                  service: script.hyte_manual_soft_now
+              - type: button
+                name: HYTE Normal
+                icon: mdi:brightness-5
+                icon_height: 35px
+                tap_action:
+                  action: call-service
+                  service: script.hyte_manual_normal_now
+              - type: button
+                name: HYTE Punchy
+                icon: mdi:star-four-points
+                icon_height: 35px
+                tap_action:
+                  action: call-service
+                  service: script.hyte_manual_punchy_now
+              - type: button
+                name: HYTE Auto
+                icon: mdi:home-clock
+                icon_height: 35px
+                tap_action:
+                  action: call-service
+                  service: script.hyte_auto_now
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: PC Manuel haut
+                icon: mdi:led-strip-variant
+                icon_height: 35px
+                tap_action:
+                  action: call-service
+                  service: script.pc_leds_manual_high_now
+              - type: button
+                name: PC Auto
+                icon: mdi:home-clock
+                icon_height: 35px
+                tap_action:
+                  action: call-service
+                  service: script.pc_leds_auto_now
           - type: horizontal-stack
             cards:
               - type: button

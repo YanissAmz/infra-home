@@ -302,7 +302,6 @@ infra-home/
 |   |-- ambilight_unified_sync.py   # TV -> Hue + OpenRGB sync
 |   |-- philips_jointspace.py       # JointSPACE API CLI (pair, control)
 |   |-- philips_hue_ambisync.py     # Hue-only sync (legacy)
-|   |-- ambilight_to_openrgb.py     # OpenRGB-only sync (legacy)
 |   |-- debloat_firetv.sh           # Fire TV debloat/restore
 |   |-- ha_command_bridge.sh        # Host systemctl bridge for HA
 |   |-- update_status.sh            # Cron status updater for HA sensors

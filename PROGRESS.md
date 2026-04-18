@@ -257,7 +257,6 @@ infra-home/
 │   ├── philips_jointspace.py                     # wrapper API TV (pairing + ambilight + remote)
 │   ├── philips_hue_ambisync.py                   # ancien sync Hue seul (remplacé par unified)
 │   ├── ambilight_unified_sync.py                 # 🔑 SYNC UNIFIÉ Ambilight → Hue + OpenRGB
-│   ├── ambilight_to_openrgb.py                   # ancien sync OpenRGB seul (remplacé par unified)
 │   ├── debloat_firetv.sh                         # debloat ADB Amazon
 │   ├── firetv_sideload.sh                        # batch install APKs
 │   ├── shutdown_lights.sh                        # extinction Govee+Hue à l'arrêt PC

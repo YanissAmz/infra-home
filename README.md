@@ -120,6 +120,9 @@ cp ha_config/secrets.example.yaml ha_config/secrets.yaml          # HA shell com
 # Edit both files with your values
 ```
 
+`ambisync_config/config.yml` is intentionally local-only and ignored by Git.
+Commit updates to `ambisync_config/config.example.yml` instead when the schema changes.
+
 ### 2. Pair your TV (JointSPACE)
 
 ```bash

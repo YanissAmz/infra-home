@@ -5,10 +5,7 @@
 > TP Vision removed Ambilight+Hue from 2023 Philips TVs, pushing a ~250 EUR Hue Sync Box.
 > This project brings it back for free, and goes much further.
 
-<!-- TODO: Replace with actual demo video -->
-<!-- https://github.com/user-attachments/assets/your-video-id -->
-
-https://github.com/user-attachments/assets/PLACEHOLDER_DEMO_VIDEO
+> 📸 _Demo video and dashboard screenshots coming soon — see [Demo](#demo)._
 
 ---
 
@@ -26,28 +23,13 @@ https://github.com/user-attachments/assets/PLACEHOLDER_DEMO_VIDEO
 
 ## Demo
 
-### Dashboard
-
-<!-- TODO: Screenshot of the main dashboard -->
-![Dashboard - Chambre](docs/screenshots/dashboard_chambre.png)
-
-<!-- TODO: Screenshot of the services view -->
-![Dashboard - Services](docs/screenshots/dashboard_services.png)
-
-<!-- TODO: Screenshot of the network view -->
-![Dashboard - Reseau](docs/screenshots/dashboard_reseau.png)
-
-### Ambilight Sync in action
-
-<!-- TODO: Photo/video of TV + Hue lamps + PC LEDs all synced -->
-![Ambilight Sync](docs/screenshots/ambilight_sync_demo.gif)
-
-### Before / After Fire TV
-
-<!-- TODO: Side by side screenshots -->
-| Before (stock) | After (debloated) |
-|:-:|:-:|
-| ![Before](docs/screenshots/firetv_before.png) | ![After](docs/screenshots/firetv_after.png) |
+> 📸 Visuals coming soon. Slots reserved below — they'll be filled with the
+> live setup once captured. In the meantime, the [Architecture](#architecture)
+> section explains how each piece fits together.
+>
+> - **Dashboard views** — main control, services panel, network panel
+> - **Ambilight sync in action** — TV → Hue lamps + PC LEDs animation
+> - **Fire TV before/after** — stock launcher vs. debloated build
 
 ---
 

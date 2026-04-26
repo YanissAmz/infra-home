@@ -1,6 +1,7 @@
 #!/bin/bash
 # Bridge: HA writes command files, this script on host executes them
-CMD_DIR="/home/yaniss/projects/infra-home/ha_config/commands"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CMD_DIR="${INFRA_HOME_CMD_DIR:-$SCRIPT_DIR/../ha_config/commands}"
 mkdir -p "$CMD_DIR"
 
 while true; do

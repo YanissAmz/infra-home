@@ -36,5 +36,5 @@ runtime:
     day: 15
     night: 40
   status:
-    dir: "/home/yaniss/projects/infra-home/ha_config/status"
+    dir: "/path/to/infra-home/ha_config/status"
     refresh_interval_s: 5
